@@ -94,6 +94,8 @@ public:
     amdil64,        // AMDIL with 64-bit pointers
     hsail,          // AMD HSAIL
     hsail64,        // AMD HSAIL with 64-bit pointers
+    sodium16,       // 16-bit Sodium
+    sodium32,       // 32-bit Sodium
     spir,           // SPIR: standard portable IR for OpenCL 32-bit version
     spir64,         // SPIR: standard portable IR for OpenCL 64-bit version
     spirv32,        // SPIR-V with 32-bit pointers

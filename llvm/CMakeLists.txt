@@ -441,6 +441,7 @@ set(LLVM_ALL_TARGETS
   PowerPC
   RISCV
   Sparc
+  Sodium
   SystemZ
   VE
   WebAssembly

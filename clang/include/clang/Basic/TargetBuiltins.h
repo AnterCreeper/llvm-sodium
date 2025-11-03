@@ -174,6 +174,16 @@ namespace clang {
   };
   } // namespace LoongArch
 
+  /// Sodium builtins
+  namespace Sodium {
+  enum {
+    LastTIBuiltin = clang::Builtin::FirstTSBuiltin - 1,
+#define BUILTIN(ID, TYPE, ATTRS) BI##ID,
+#include "clang/Basic/BuiltinsSodium.def"
+    LastTSBuiltin
+  };
+  } // namespace Sodium
+
   /// Flags to identify the types for overloaded Neon builtins.
   ///
   /// These must be kept in sync with the flags in utils/TableGen/NeonEmitter.h.

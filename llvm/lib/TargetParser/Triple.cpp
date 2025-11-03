@@ -65,6 +65,8 @@ StringRef Triple::getArchTypeName(ArchType Kind) {
   case riscv32:        return "riscv32";
   case riscv64:        return "riscv64";
   case shave:          return "shave";
+  case sodium16:       return "sodium16";
+  case sodium32:       return "sodium32";
   case sparc:          return "sparc";
   case sparcel:        return "sparcel";
   case sparcv9:        return "sparcv9";
@@ -160,6 +162,10 @@ StringRef Triple::getArchTypePrefix(ArchType Kind) {
   case kalimba:     return "kalimba";
   case lanai:       return "lanai";
   case shave:       return "shave";
+
+  case sodium16:    return "sodium";
+  case sodium32:    return "sodium";
+
   case wasm32:
   case wasm64:      return "wasm";
 
@@ -358,6 +364,8 @@ Triple::ArchType Triple::getArchTypeForLLVMName(StringRef Name) {
     .Case("riscv32", riscv32)
     .Case("riscv64", riscv64)
     .Case("hexagon", hexagon)
+    .Case("sodium16", sodium16)
+    .Case("sodium32", sodium32)
     .Case("sparc", sparc)
     .Case("sparcel", sparcel)
     .Case("sparcv9", sparcv9)
@@ -505,6 +513,8 @@ static Triple::ArchType parseArch(StringRef ArchName) {
     .Case("riscv64", Triple::riscv64)
     .Case("hexagon", Triple::hexagon)
     .Cases("s390x", "systemz", Triple::systemz)
+    .Case("sodium16", Triple::sodium16)
+    .Case("sodium32", Triple::sodium32)
     .Case("sparc", Triple::sparc)
     .Case("sparcel", Triple::sparcel)
     .Cases("sparcv9", "sparc64", Triple::sparcv9)
@@ -841,6 +851,8 @@ static Triple::ObjectFormatType getDefaultFormat(const Triple &T) {
   case Triple::riscv32:
   case Triple::riscv64:
   case Triple::shave:
+  case Triple::sodium16:
+  case Triple::sodium32:
   case Triple::sparc:
   case Triple::sparcel:
   case Triple::sparcv9:
@@ -1396,6 +1408,7 @@ static unsigned getArchPointerBitWidth(llvm::Triple::ArchType Arch) {
 
   case llvm::Triple::avr:
   case llvm::Triple::msp430:
+  case llvm::Triple::sodium16:
     return 16;
 
   case llvm::Triple::aarch64_32:
@@ -1433,6 +1446,7 @@ static unsigned getArchPointerBitWidth(llvm::Triple::ArchType Arch) {
   case llvm::Triple::x86:
   case llvm::Triple::xcore:
   case llvm::Triple::xtensa:
+  case llvm::Triple::sodium32:
     return 32;
 
   case llvm::Triple::aarch64:
@@ -1512,6 +1526,7 @@ Triple Triple::get32BitArchVariant() const {
   case Triple::renderscript32:
   case Triple::riscv32:
   case Triple::shave:
+  case Triple::sodium32:
   case Triple::sparc:
   case Triple::sparcel:
   case Triple::spir:
@@ -1544,6 +1559,7 @@ Triple Triple::get32BitArchVariant() const {
   case Triple::ppc64le:        T.setArch(Triple::ppcle);   break;
   case Triple::renderscript64: T.setArch(Triple::renderscript32); break;
   case Triple::riscv64:        T.setArch(Triple::riscv32); break;
+  case Triple::sodium16:       T.setArch(Triple::sodium32); break;
   case Triple::sparcv9:        T.setArch(Triple::sparc);   break;
   case Triple::spir64:         T.setArch(Triple::spir);    break;
   case Triple::spirv64:
@@ -1570,6 +1586,8 @@ Triple Triple::get64BitArchVariant() const {
   case Triple::msp430:
   case Triple::r600:
   case Triple::shave:
+  case Triple::sodium16:
+  case Triple::sodium32:
   case Triple::sparcel:
   case Triple::tce:
   case Triple::tcele:

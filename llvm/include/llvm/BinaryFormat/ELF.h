@@ -320,6 +320,7 @@ enum {
   EM_VE = 251,            // NEC SX-Aurora VE
   EM_CSKY = 252,          // C-SKY 32-bit processor
   EM_LOONGARCH = 258,     // LoongArch
+  EM_SODIUM = 999,        // Sodium
 };
 
 // Object file classes.
@@ -948,6 +949,22 @@ enum : unsigned {
 // ELF Relocation types for Xtensa
 enum {
 #include "ELFRelocs/Xtensa.def"
+};
+
+// Sodium specific e_flags.
+enum : unsigned {
+  // Base ABI Modifiers
+  EF_SODIUM_ABI_16BIT         = 0x0,
+  EF_SODIUM_ABI_32BIT         = 0x1,
+  EF_SODIUM_ABI_MODIFIER_MASK = 0x7,
+  // Object file ABI versions
+  EF_SODIUM_OBJABI_V0         = 0x0,
+  EF_SODIUM_OBJABI_MASK       = 0xC0,
+};
+
+// ELF Relocation types for Sodium
+enum {
+#include "ELFRelocs/Sodium.def"
 };
 
 #undef ELF_RELOC

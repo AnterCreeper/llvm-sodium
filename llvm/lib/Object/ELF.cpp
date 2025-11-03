@@ -123,6 +123,13 @@ StringRef llvm::object::getELFRelocationTypeName(uint32_t Machine,
       break;
     }
     break;
+  case ELF::EM_SODIUM:
+    switch (Type) {
+#include "llvm/BinaryFormat/ELFRelocs/Sodium.def"
+    default:
+      break;
+    }
+    break;
   case ELF::EM_SPARC:
   case ELF::EM_SPARC32PLUS:
   case ELF::EM_SPARCV9:

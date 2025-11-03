@@ -1216,6 +1216,8 @@ StringRef ELFObjectFile<ELFT>::getFileFormatName() const {
       return "elf32-littleriscv";
     case ELF::EM_CSKY:
       return "elf32-csky";
+    case ELF::EM_SODIUM:
+      return "elf32-sodium";
     case ELF::EM_SPARC:
     case ELF::EM_SPARC32PLUS:
       return "elf32-sparc";
@@ -1310,6 +1312,15 @@ template <class ELFT> Triple::ArchType ELFObjectFile<ELFT>::getArch() const {
   case ELF::EM_S390:
     return Triple::systemz;
 
+  case ELF::EM_SODIUM:
+    switch (EF.getHeader().e_flags & ELF::EF_SODIUM_ABI_MODIFIER_MASK) {
+      case ELF::EF_SODIUM_ABI_16BIT:
+        return Triple::sodium16;
+      case ELF::EF_SODIUM_ABI_32BIT:
+        return Triple::sodium32;
+      default:
+        return Triple::UnknownArch;
+    }
   case ELF::EM_SPARC:
   case ELF::EM_SPARC32PLUS:
     return IsLittleEndian ? Triple::sparcel : Triple::sparc;

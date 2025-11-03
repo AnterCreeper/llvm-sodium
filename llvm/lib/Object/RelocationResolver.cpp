@@ -585,6 +585,51 @@ static uint64_t resolveLoongArch(uint64_t Type, uint64_t Offset, uint64_t S,
   }
 }
 
+static bool supportsSodium(uint64_t Type) {
+  switch (Type) {
+  case ELF::R_SODIUM_NONE:
+  case ELF::R_SODIUM_16:
+  case ELF::R_SODIUM_32:
+  case ELF::R_SODIUM_ADD8:
+  case ELF::R_SODIUM_SUB8:
+  case ELF::R_SODIUM_ADD16:
+  case ELF::R_SODIUM_SUB16:
+  case ELF::R_SODIUM_ADD32:
+  case ELF::R_SODIUM_SUB32:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static uint64_t resolveSodium(uint64_t Type, uint64_t Offset, uint64_t S,
+                              uint64_t LocData, int64_t Addend) {
+  int64_t RA = Addend;
+  uint64_t A = LocData;
+  switch (Type) {
+  case ELF::R_SODIUM_NONE:
+    return LocData;
+  case ELF::R_SODIUM_16:
+    return (S + RA) & 0xFFFF;
+  case ELF::R_SODIUM_32:
+    return (S + RA) & 0xFFFFFFFF;
+  case ELF::R_SODIUM_ADD8:
+    return (A + (S + RA)) & 0xFF;
+  case ELF::R_SODIUM_SUB8:
+    return (A - (S + RA)) & 0xFF;
+  case ELF::R_SODIUM_ADD16:
+    return (A + (S + RA)) & 0xFFFF;
+  case ELF::R_SODIUM_SUB16:
+    return (A - (S + RA)) & 0xFFFF;
+  case ELF::R_SODIUM_ADD32:
+    return (A + (S + RA)) & 0xFFFFFFFF;
+  case ELF::R_SODIUM_SUB32:
+    return (A - (S + RA)) & 0xFFFFFFFF;
+  default:
+    llvm_unreachable("Invalid relocation type");
+  }
+}
+
 static bool supportsCOFFX86(uint64_t Type) {
   switch (Type) {
   case COFF::IMAGE_REL_I386_SECREL:
@@ -840,6 +885,9 @@ getRelocationResolver(const ObjectFile &Obj) {
       return {supportsAmdgpu, resolveAmdgpu};
     case Triple::riscv32:
       return {supportsRISCV, resolveRISCV};
+    case Triple::sodium16:
+    case Triple::sodium32:
+      return {supportsSodium, resolveSodium};
     case Triple::csky:
       return {supportsCSKY, resolveCSKY};
     default:
