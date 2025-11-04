@@ -53,7 +53,7 @@ SodiumTargetLowering::SodiumTargetLowering(const TargetMachine &TM,
   computeRegisterProperties(Subtarget.getRegisterInfo());
 
   setMinFunctionAlignment(Align(2));
-  setStackPointerRegisterToSaveRestore(Sodium::X4); //$sp
+  setStackPointerRegisterToSaveRestore(Sodium::X4);
 
   setJumpIsExpensive();
   setMinimumJumpTableEntries(5);
@@ -91,10 +91,11 @@ SodiumTargetLowering::SodiumTargetLowering(const TargetMachine &TM,
 
   setOperationAction(ISD::PREFETCH, MVT::Other, Legal);
   setOperationAction({ISD::TRAP, ISD::DEBUGTRAP}, MVT::Other, Legal);
-  //v2i16 stuffs.
+
+  // v2i16 stuffs, which derived from Sparc Target.
   /*
-    // On 32bit sparc, we define a double-register 32bit register
-    // class, as well. This is modeled in LLVM as a 2-vector of i32.
+    // On 32bit sodium, we define a double-register 16bit register
+    // class, as well. This is modeled in LLVM as a 2-vector of i16.
     addRegisterClass(MVT::v2i16, &Sodium::IntPairRegClass);
 
     // ...but almost all operations must be expanded, so set that as
@@ -121,7 +122,7 @@ SodiumTargetLowering::SodiumTargetLowering(const TargetMachine &TM,
     setOperationAction(ISD::EXTRACT_VECTOR_ELT, MVT::v2i16, Legal);
     setOperationAction(ISD::BUILD_VECTOR, MVT::v2i16, Legal);
 
-    // And we need to promote i64 loads/stores into vector load/store
+    // And we need to promote i32 loads/stores into vector load/store
     setOperationAction(ISD::LOAD, MVT::i32, Custom);
     setOperationAction(ISD::STORE, MVT::i32, Custom);
 

@@ -34,8 +34,8 @@ def SodiumCC : CallingConv<[
   CCIfType<[i1, i8], CCPromoteToType<i16>>,
   // i16 arguments get passed in integer registers if there is space.
   CCIfType<[i16], CCAssignToReg<[X10, X11, X12, X13, X14, X15, X16, X17]>>,
-  // As are v2i32 arguments (this would be the default behavior for
-  // v2i32 if it wasn't allocated to the IntPair register-class)
+  // As are v2i16 arguments (this would be the default behavior for
+  // v2i16 if it wasn't allocated to the IntPair register-class)
   //CCIfType<[v2i16], CCCustom<"">>
   // Alternatively, they are assigned to the stack in 2-byte aligned units.
   CCAssignToStack<2, 2>

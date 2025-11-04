@@ -54,10 +54,6 @@ private:
                            MachineBasicBlock::iterator MBBI,
                            MachineBasicBlock::iterator &NextMBBI,
                            unsigned FlagsHi, unsigned SecondOpcode);
-  bool expandFunctionCall(MachineBasicBlock &MBB,
-                          MachineBasicBlock::iterator MBBI,
-                          MachineBasicBlock::iterator &NextMBBI,
-                          bool IsTailCall = false, bool IsIndJmp = false);
 
 };
 
@@ -96,14 +92,6 @@ bool SodiumExpandPseudo::expandMI(MachineBasicBlock &MBB,
     return expandLoadLocalAddress(MBB, MBBI, NextMBBI);
   case Sodium::PseudoLGA:
     return expandLoadGlobalAddress(MBB, MBBI, NextMBBI);
-  /*
-  case Sodium::PseudoCall:
-    return expandFunctionCall(MBB, MBBI, NextMBBI, false);
-  case Sodium::PseudoTail:
-    return expandFunctionCall(MBB, MBBI, NextMBBI, true);
-  case Sodium::PseudoJump:
-    return expandFunctionCall(MBB, MBBI, NextMBBI, false, true);
-  */
   }
   return false;
 }
@@ -145,58 +133,8 @@ bool SodiumExpandPseudo::expandAuipcInstPair(MachineBasicBlock &MBB,
     BuildMI(MBB, MBBI, DL, TII->get(SecondOpcode), DestReg)
     .addReg(DestReg)
     .addSym(AUIPCSymbol, SODIUMII::MO_PCREL_LO);
-  /*
-  BuildMI(MBB, MBBI, DL, TII->get(Sodium::AUIPC), DestReg)
-      .addDisp(Symbol, 0, FlagsHi);
-  MachineInstr *SecondMI =
-    BuildMI(MBB, MBBI, DL, TII->get(SecondOpcode), DestReg)
-      .addReg(DestReg)
-      .addDisp(Symbol, 0, SODIUMII::MO_PCREL_LO);
   if (MI.hasOneMemOperand())
     SecondMI->addMemOperand(*MF, *MI.memoperands_begin());
-  */
-
-  MI.eraseFromParent();
-  return true;
-}
-
-bool SodiumExpandPseudo::expandFunctionCall(MachineBasicBlock &MBB,
-                                            MachineBasicBlock::iterator MBBI,
-                                            MachineBasicBlock::iterator &NextMBBI,
-                                            bool IsTailCall, bool IsIndJmp) {
-  MachineInstr &MI = *MBBI;
-  DebugLoc DL = MI.getDebugLoc();
-  MachineFunction *MF = MBB.getParent();
-
-  //call %sym => BLR (AUIPC %hi(sym)), %lo(sym), relax to BL offset(sym)
-  //tail %sym => BLR (AUIPC %hi(sym)), %lo(sym), relax to BL offset(sym)
-  //jump %sym => BR  (AUIPC %hi(sym)), %lo(sym), relax to BR X0, offset(sym)
-
-  const MachineOperand &Func = MI.getOperand(0);
-  unsigned Opcode = IsIndJmp ? Sodium::BR : Sodium::BLR;
-
-  Register ScratchReg =
-    IsTailCall ? MF->getRegInfo().createVirtualRegister(&Sodium::IntRegsRegClass)
-               : Sodium::X2;
-
-  MachineInstrBuilder MIB =
-    BuildMI(MBB, MBBI, DL, TII->get(Sodium::AUIPC), ScratchReg);
-  MachineInstrBuilder CALL =
-    BuildMI(MBB, MBBI, DL, TII->get(Opcode)).addReg(ScratchReg);
-
-  if (Func.isSymbol()) {
-    const char *SymName = Func.getSymbolName();
-    MIB.addExternalSymbol(SymName, SODIUMII::MO_CALL);
-  } else {
-    assert(Func.isGlobal() && "Expected a GlobalValue at this time");
-    const GlobalValue *GV = Func.getGlobal();
-    MIB.addGlobalAddress(GV, 0, SODIUMII::MO_PLT);
-  }
-
-  // Transfer implicit operands.
-  CALL.copyImplicitOps(MI);
-  // Transfer MI flags.
-  CALL.setMIFlags(MI.getFlags());
 
   MI.eraseFromParent();
   return true;

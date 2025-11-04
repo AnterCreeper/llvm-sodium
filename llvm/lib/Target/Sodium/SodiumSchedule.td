@@ -6,23 +6,23 @@
 //
 //===----------------------------------------------------------------------===//
 
-/// Define scheduler resources associated with def operands.
-def WriteIALU       : SchedWrite;    // ALU operations
-def WriteJmp        : SchedWrite;    // Uncond Jump
-def WriteJal        : SchedWrite;    // Uncond Jump and link
-def WriteJalr       : SchedWrite;    // Uncond Jump and link register
-def WriteBranch     : SchedWrite;    // Cond Branch
-def WriteLoad       : SchedWrite;    // Load
-def WriteStore      : SchedWrite;    // Store
-def WriteCSR        : SchedWrite;    // CSR read & write
-
-/// Define scheduler resources associated with use operands.
+// ALU operations
 def ReadIALU        : SchedRead;
-def ReadJmp         : SchedRead;
-def ReadJalr        : SchedRead;
+def WriteIALU       : SchedWrite;
+
+// Branch
+def ReadBranch      : SchedRead;
+def WriteBranch     : SchedWrite;
+
+// CSR read & write
 def ReadCSR         : SchedRead;
+def WriteCSR        : SchedWrite;
+
+// Mem load & store
 def ReadMemBase     : SchedRead;
 def ReadStoreData   : SchedRead;
+def WriteLoad       : SchedWrite;
+def WriteStore      : SchedWrite;
 
 def SodiumGenericModel : SchedMachineModel {
     let MicroOpBufferSize = 0; // in-order.
@@ -33,19 +33,15 @@ def SodiumGenericModel : SchedMachineModel {
 }
 
 let BufferSize = 0 in {
-    def SodiumUnitALU   : ProcResource<1>; // ALU
-    def SodiumUnitMem   : ProcResource<1>; // Load/Store
-    def SodiumUnitCsr   : ProcResource<1>; // CSR
-    def SodiumUnitB     : ProcResource<1>; // Branch
+def SodiumUnitB   : ProcResource<1>; // Branch
+def SodiumUnitALU : ProcResource<1>; // ALU
+def SodiumUnitMem : ProcResource<1>; // Load/Store
+def SodiumUnitCsr : ProcResource<1>; // CSR
 }
 
-/*
 let SchedModel = SodiumGenericModel in {
 
 let Latency = 0 in {
-def : WriteRes<WriteJmp,    [SodiumUnitB]>;
-def : WriteRes<WriteJal,    [SodiumUnitB]>;
-def : WriteRes<WriteJalr,   [SodiumUnitB]>;
 def : WriteRes<WriteBranch, [SodiumUnitB]>;
 }
 
@@ -59,19 +55,9 @@ let Latency = 3 in {
 def : WriteRes<WriteCSR,    [SodiumUnitCsr]>;
 }
 
-def ReadIALU        : SchedRead;
-def ReadJmp         : SchedRead;
-def ReadJalr        : SchedRead;
-def ReadCSR         : SchedRead;
-def ReadMemBase     : SchedRead;
-def ReadStoreData   : SchedRead;
-
-// Bypass and advance
 def : ReadAdvance<ReadIALU, 0>;
-def : ReadAdvance<ReadJmp,  0>;
-def : ReadAdvance<ReadJalr, 0>;
-def : ReadAdvance<ReadCSR,  0>;
-def : ReadAdvance<ReadMemBase, 0>;
+def : ReadAdvance<ReadBranch, 0>;
+def : ReadAdvance<ReadCSR, 0>;
+def : ReadAdvance<ReadMemBase, 1>;
 def : ReadAdvance<ReadStoreData, 0>;
 }
-*/

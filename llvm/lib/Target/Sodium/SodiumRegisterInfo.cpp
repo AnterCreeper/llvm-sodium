@@ -36,38 +36,51 @@ using namespace llvm;
 SodiumRegisterInfo::SodiumRegisterInfo(const SodiumSubtarget &ST)
   : SodiumGenRegisterInfo(Sodium::X2), Subtarget(ST) {}
 
-const MCPhysReg *
-SodiumRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
+const MCPhysReg
+*SodiumRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
   if (MF->getFunction().hasFnAttribute("interrupt")) {
     return CSR_Interrupt_SaveList;
   }
   return CSR_Default_SaveList;
 }
 
-const uint32_t *SodiumRegisterInfo::getCallPreservedMask(const MachineFunction & MF,
-                                                         CallingConv::ID CC) const {
-  return CSR_Default_RegMask;
-}
-const uint32_t *SodiumRegisterInfo::getNoPreservedMask() const {
+const uint32_t
+*SodiumRegisterInfo::getNoPreservedMask() const {
   return CSR_NoReg_RegMask;
+}
+const uint32_t
+*SodiumRegisterInfo::getCallPreservedMask(const MachineFunction & MF,
+                                          CallingConv::ID CC) const {
+  return CSR_Default_RegMask;
 }
 
 BitVector SodiumRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
-  BitVector Reserved(getNumRegs());
+  const TargetFrameLowering *TFI = getFrameLowering(MF);
 
+  BitVector Reserved(getNumRegs());
   // Use markSuperRegs to ensure any register aliases are also reserved
   markSuperRegs(Reserved, Sodium::X0); // zero
-  markSuperRegs(Reserved, Sodium::X1); // zero32
   markSuperRegs(Reserved, Sodium::X2); // ra
-  markSuperRegs(Reserved, Sodium::X3); // ra32
   markSuperRegs(Reserved, Sodium::X4); // sp
-  markSuperRegs(Reserved, Sodium::X5); // sp32
-  markSuperRegs(Reserved, Sodium::X6); // tp
-  markSuperRegs(Reserved, Sodium::X7); // tp32
-  const TargetFrameLowering *TFI = getFrameLowering(MF);
+  markSuperRegs(Reserved, Sodium::X6); // gp
+  if(Subtarget.is32Bit) {
+  markSuperRegs(Reserved, Sodium::X3); // ra
+  markSuperRegs(Reserved, Sodium::X5); // sp
+  markSuperRegs(Reserved, Sodium::X7); // gp
+  }
   if (TFI->hasFP(MF)) {
-    markSuperRegs(Reserved, Sodium::X8); // fp
-    if(Subtarget.is32Bit) markSuperRegs(Reserved, Sodium::X9);
+  markSuperRegs(Reserved, Sodium::X8); // fp
+  if(Subtarget.is32Bit)
+  markSuperRegs(Reserved, Sodium::X9); // fp
+  }
+  // Also reserve the register pair aliases covering the above
+  // registers, with the same conditions.
+  markSuperRegs(Reserved, Sodium::D0); // zero32
+  markSuperRegs(Reserved, Sodium::D1); // ra32
+  markSuperRegs(Reserved, Sodium::D2); // sp32
+  markSuperRegs(Reserved, Sodium::D3); // gp32
+  if (TFI->hasFP(MF)) {
+  markSuperRegs(Reserved, Sodium::D4); // fp32
   }
 
   assert(checkAllSuperRegsMarked(Reserved));
@@ -177,6 +190,6 @@ bool SodiumRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
 Register SodiumRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
   const TargetFrameLowering *TFI = getFrameLowering(MF);
-  return TFI->hasFP(MF) ? Sodium::X8 : Sodium::X4; //return $fp or $sp
+  return TFI->hasFP(MF) ? (Subtarget.is32Bit ? Sodium::D4 : Sodium::X8)   //$fp32; $fp
+                        : (Subtarget.is32Bit ? Sodium::D2 : Sodium::X4);  //$sp32; $sp
 }
-

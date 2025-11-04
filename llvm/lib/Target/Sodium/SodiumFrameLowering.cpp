@@ -54,7 +54,7 @@ void SodiumFrameLowering::adjustReg(MachineBasicBlock &MBB,
   const SodiumInstrInfo &TII =
     *static_cast<const SodiumInstrInfo *>(STI.getInstrInfo());
   if (isInt<12>(Val)) {
-    // addi $DstReg, $SrcReg, Val
+  // addi $DstReg, $SrcReg, Val
     BuildMI(MBB, MBBI, DL, TII.get(Sodium::ADDI), DestReg)
       .addReg(SrcReg)
       .addImm(Val)
@@ -68,6 +68,8 @@ void SodiumFrameLowering::adjustReg(MachineBasicBlock &MBB,
     Val = -Val;
     Opc = Sodium::SUB;
   }
+  //li $Scratch, Val
+  //add/sub $DstReg, $SrcReg, $Scratch
   TII.movImm(MBB, MBBI, DL, ScratchReg, Val, Flag, is32Bit);
   BuildMI(MBB, MBBI, DL, TII.get(Opc), DestReg)
     .addReg(SrcReg)
@@ -252,7 +254,7 @@ SodiumFrameLowering::eliminateCallFramePseudoInstr(MachineFunction &MF, MachineB
       Amount = alignSPAdjust(Amount);
       if (I->getOpcode() == Sodium::ADJCALLSTACKDOWN)
         Amount = -Amount;
-      const SodiumRegisterInfo &RI = *STI.getRegisterInfo();
+      //const SodiumRegisterInfo &RI = *STI.getRegisterInfo();
       adjustReg(MBB, I, DL, SPReg, SPReg, Amount, MachineInstr::NoFlags, ST.is32Bit);
     }
   }

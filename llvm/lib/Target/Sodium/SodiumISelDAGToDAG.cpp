@@ -75,7 +75,7 @@ void SodiumDAGToDAGISel::Select(SDNode *Node) {
   SelectCode(Node);
 }
 
-// This pass converts a legalized DAG into a RISCV-specific DAG, ready
+// This pass converts a legalized DAG into a Sodium-specific DAG, ready
 // for instruction scheduling.
 FunctionPass *llvm::createSodiumISelDag(SodiumTargetMachine &TM,
                                         CodeGenOpt::Level OptLevel) {

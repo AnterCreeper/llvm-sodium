@@ -57,6 +57,14 @@ public:
                                  SmallVectorImpl<MCFixup> &Fixups,
                                  const MCSubtargetInfo &STI) const;
 
+private:
+  void expandFunctionCall(const MCInst &MI,
+                          SmallVectorImpl<char> &CB,
+                          SmallVectorImpl<MCFixup> &Fixups,
+                          const MCSubtargetInfo &STI,
+                          bool IsTailCall = false,
+                          bool IsIndJmp = false) const;
+
 };
 } // namespace llvm
 
@@ -65,11 +73,48 @@ MCCodeEmitter *llvm::createSodiumMCCodeEmitter(const MCInstrInfo &MCII,
   return new SodiumMCCodeEmitter(Ctx, MCII);
 }
 
+void SodiumMCCodeEmitter::expandFunctionCall(const MCInst &MI,
+                                             SmallVectorImpl<char> &CB,
+                                             SmallVectorImpl<MCFixup> &Fixups,
+                                             const MCSubtargetInfo &STI,
+                                             bool IsTailCall, bool IsIndJmp) const {
+  MCInst TmpInst;
+  uint32_t Binary;
+  unsigned Opcode = IsIndJmp ? Sodium::BR : Sodium::BLR;
+
+  MCOperand Func = MI.getOperand(0);
+  assert(Func.isExpr() && "Expected expression");
+
+  const MCExpr *CallExpr = Func.getExpr();
+
+  // Emit AUIPC Ra, Func with R_SODIUM_CALL relocation type.
+  TmpInst = MCInstBuilder(Sodium::AUIPC).addReg(Sodium::X2).addExpr(CallExpr);
+  Binary = getBinaryCodeForInstr(TmpInst, Fixups, STI);
+  support::endian::write(CB, Binary, support::little);
+
+  TmpInst = MCInstBuilder(Opcode).addReg(Sodium::X2).addImm(0);
+  Binary = getBinaryCodeForInstr(TmpInst, Fixups, STI);
+  support::endian::write(CB, Binary, support::little);
+}
+
 void SodiumMCCodeEmitter::encodeInstruction(const MCInst &MI, SmallVectorImpl<char> &CB,
                                             SmallVectorImpl<MCFixup> &Fixups,
                                             const MCSubtargetInfo &STI) const {
   LLVM_DEBUG(errs() << MI);
   const MCInstrDesc &Desc = MCII.get(MI.getOpcode());
+  switch (MI.getOpcode()) {
+  default:
+    break;
+  case Sodium::PseudoCall:
+    expandFunctionCall(MI, CB, Fixups, STI, false);
+    return;
+  case Sodium::PseudoTail:
+    expandFunctionCall(MI, CB, Fixups, STI, true);
+    return;
+  case Sodium::PseudoJump:
+    expandFunctionCall(MI, CB, Fixups, STI, false, true);
+    return;
+  }
   // Get byte count of instruction.
   unsigned Size = Desc.getSize();
   switch (Size) {
@@ -89,6 +134,7 @@ SodiumMCCodeEmitter::getExprOpValue(const MCInst &MI, const MCExpr *Expr,
                                     SmallVectorImpl<MCFixup> &Fixups,
                                     const MCSubtargetInfo &STI) const {
   unsigned MIFrm = SODIUMII::getFormat(MCII.get(MI.getOpcode()).TSFlags);
+  bool isFMT_I = MIFrm == SODIUMII::InstFMT_I;
 
   bool RelaxCandidate = false;
   MCExpr::ExprKind Kind = Expr->getKind();
@@ -101,11 +147,13 @@ SodiumMCCodeEmitter::getExprOpValue(const MCInst &MI, const MCExpr *Expr,
       llvm_unreachable("Unhandled fixup kind!");
     case SodiumMCExpr::VK_SODIUM_LO:
       RelaxCandidate = true;
-      FixupKind = Sodium::Fixups::fixup_sodium_lo13;
+      FixupKind = isFMT_I ? Sodium::Fixups::fixup_sodium_lo13
+                          : Sodium::Fixups::fixup_sodium_lo13s;
       break;
     case SodiumMCExpr::VK_SODIUM_PCREL_LO:
       RelaxCandidate = true;
-      FixupKind = Sodium::Fixups::fixup_sodium_pcrel_lo13;
+      FixupKind = isFMT_I ? Sodium::Fixups::fixup_sodium_pcrel_lo13
+                          : Sodium::Fixups::fixup_sodium_pcrel_lo13s;
       break;
     case SodiumMCExpr::VK_SODIUM_HI:
       RelaxCandidate = true;

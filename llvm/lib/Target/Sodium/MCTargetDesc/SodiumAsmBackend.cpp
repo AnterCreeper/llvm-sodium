@@ -105,7 +105,9 @@ bool SodiumAsmBackend::handleAddSubRelocations(const MCAsmLayout &Layout,
   return true;
 }
 
-#define ALIGN1(x) if((x) & 0x1) Ctx.reportError(Fixup.getLoc(), "fixup value must be 2-byte aligned")
+#define ALIGN(x, y) if((x)&((1<<(y))-1)) Ctx.reportError(Fixup.getLoc(), "fixup value must be 2-byte aligned")
+
+//bit field extract, return X[m:n]
 #define GETBITS(x, n, m) ((x >> n) & ((1 << (m - n + 1)) - 1))
 
 static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
@@ -142,21 +144,21 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
            (GETBITS(Value, 15, 19) << 12);
   }
   case Sodium::fixup_sodium_jump25: {     //B
-    ALIGN1(Value);
+    ALIGN(Value, 1);
     return (GETBITS(Value, 1,  5)  << 4)  |
            (GETBITS(Value, 6,  15) << 22) |
            (GETBITS(Value, 16, 25) << 12);
   }
   case Sodium::fixup_sodium_brcc20:
   case Sodium::fixup_sodium_brind20: {
-    ALIGN1(Value);
+    ALIGN(Value, 1);
     return (GETBITS(Value, 1,  5)  << 4)  |
            (GETBITS(Value, 6,  15) << 22) |
            (GETBITS(Value, 16, 20) << 12);
   }
   case Sodium::fixup_sodium_call:
   case Sodium::fixup_sodium_call_plt: {
-    ALIGN1(Value);
+    ALIGN(Value, 1);
     uint64_t LowerImm = (Value & 0x1fffULL);        //13 bits
     uint64_t UpperImm = (Value + 0x1000ULL) >> 13;  //19 bits
     //BLR

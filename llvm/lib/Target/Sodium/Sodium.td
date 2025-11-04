@@ -11,23 +11,6 @@ include "llvm/Target/Target.td"
 //===----------------------------------------------------------------------===//
 // Sodium Subtarget features.
 //===----------------------------------------------------------------------===//
-
-def FeatureSoftMul
-  : SubtargetFeature<"soft-mul", "UseSoftMul", "true",
-                     "Use software emulation for integer multiply">;
-
-def FeatureSoftDiv
-  : SubtargetFeature<"soft-div", "UseSoftDiv", "true",
-                     "Use software emulation for integer divide">;
-
-def FeatureSoftFloat
-  : SubtargetFeature<"soft-float", "UseSoftFloat", "true",
-                     "Use software emulation for floating point">;
-
-//===----------------------------------------------------------------------===//
-// Register File, Calling Conv, Instruction Descriptions
-//===----------------------------------------------------------------------===//
-
 def Feature32Bit
   : SubtargetFeature<"32bit", "IsSodium32", "true", "Implements Sodium32">;
 def IsSodium32 : Predicate<"Subtarget->is32Bit">,
@@ -37,6 +20,9 @@ def IsSodium32 : Predicate<"Subtarget->is32Bit">,
 defvar Sodium16 = DefaultMode;
 def Sodium32 : HwMode<"+32bit", [IsSodium32]>;
 
+//===----------------------------------------------------------------------===//
+// Register File, Calling Conv, Instruction Descriptions
+//===----------------------------------------------------------------------===//
 include "SodiumSchedule.td"
 include "SodiumRegisterInfo.td"
 include "SodiumInstrInfo.td"
@@ -47,12 +33,7 @@ def SodiumInstrInfo : InstrInfo;
 //===----------------------------------------------------------------------===//
 // Sodium processors supported.
 //===----------------------------------------------------------------------===//
-
-def : ProcessorModel<"generic", NoSchedModel, [FeatureSoftDiv,
-                                               FeatureSoftFloat]>;
-def : ProcessorModel<"nomul",   NoSchedModel, [FeatureSoftMul,
-                                               FeatureSoftDiv,
-                                               FeatureSoftFloat]>;
+def : ProcessorModel<"generic", SodiumGenericModel, []>;
 
 def SodiumAsmParser : AsmParser {
   bit ShouldEmitMatchRegisterName = 0;

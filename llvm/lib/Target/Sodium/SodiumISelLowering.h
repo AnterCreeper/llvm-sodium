@@ -40,6 +40,7 @@ enum NodeType : unsigned {
 class SodiumSubtarget;
 class SodiumTargetLowering : public TargetLowering {
   const SodiumSubtarget &Subtarget;
+
 public:
   explicit SodiumTargetLowering(const TargetMachine &TM, const SodiumSubtarget &STI);
 
@@ -66,6 +67,13 @@ public:
     return false;
   };
   virtual bool requiresDiffExpressionRelocations() const { return false; }
+
+  Register getExceptionPointerRegister(const Constant *PersonalityFn) const override {
+    return Sodium::X10;
+  }
+  Register getExceptionSelectorRegister(const Constant *PersonalityFn) const override {
+    return Sodium::X11;
+  }
 
 private:
   template<typename T>

@@ -284,7 +284,7 @@ class CondB_ri<bits<3> func3, string opcodestr>
     : FMT_B<func3, (outs),
                    (ins IntRegs:$rs, simm20_brcc:$imm20),
                    opcodestr, "$rs, $imm20">,
-      Sched<[WriteJmp, ReadJmp]> {
+      Sched<[WriteBranch, ReadBranch]> {
   let isBranch = 1;
   let isTerminator = 1;
 }
@@ -436,8 +436,8 @@ def NOP : HINT<0b000, "nop">;
 def WFI : HINT<0b001, "wfi">;
 
 //System Call
-def ECALL : FMT_HT<0b001, 1, 0, (outs), (ins), "ecall", "">,  Sched<[WriteJmp]>;
-def EBREAK : FMT_HT<0b001, 2, 0, (outs), (ins), "ebreak", "">, Sched<[WriteJmp]>;
+def ECALL : FMT_HT<0b001, 1, 0, (outs), (ins), "ecall", "">,  Sched<[WriteBranch]>;
+def EBREAK : FMT_HT<0b001, 2, 0, (outs), (ins), "ebreak", "">, Sched<[WriteBranch]>;
 
 def ADJCALLSTACKUP : Pseudo<(outs), (ins i16imm:$amt1, i16imm:$amt2),
                      "!ADJCALLSTACKUP", "$amt1",
@@ -447,27 +447,26 @@ def ADJCALLSTACKDOWN : Pseudo<(outs), (ins i16imm:$amt1, i16imm:$amt2),
                        [(callseq_start timm:$amt1, timm:$amt2)]>;
 
 def B : FMT_Ji<0b000,   (outs), (ins simm25_jump:$imm25),
-  "b", "$imm25", []>,         Sched<[WriteJmp]>;
+  "b", "$imm25", []>,         Sched<[WriteBranch]>;
 def BL : FMT_Ji<0b001,  (outs), (ins simm25_jump:$imm25),
-  "bl", "$imm25", []>,        Sched<[WriteIALU, WriteJmp]>;
+  "bl", "$imm25", []>,        Sched<[WriteIALU, WriteBranch]>;
 def BR : FMT_Jr<0b100,  (outs), (ins IntRegs:$rb, simm20_brind:$imm20),
-  "br", "$rb, $imm20", []>,   Sched<[WriteJmp, ReadJmp]>;
+  "br", "$rb, $imm20", []>,   Sched<[WriteBranch, ReadBranch]>;
 def BLR : FMT_Jr<0b101, (outs), (ins IntRegs:$rb, simm20_brind:$imm20),
-  "blr", "$rb, $imm20", []>,  Sched<[WriteIALU, WriteJmp, ReadJmp]>;
+  "blr", "$rb, $imm20", []>,  Sched<[WriteIALU, WriteBranch, ReadBranch]>;
 
 let isBarrier = 1, isReturn = 1, isTerminator = 1 in {
 def RET : FMT_J<0b010, 0b00010, (outs), (ins),
-  "ret", "", [(sodium_ret)]>, Sched<[WriteJmp, ReadJmp]>;
+  "ret", "",  [(sodium_ret)]>,  Sched<[WriteBranch, ReadBranch]>;
 def ERET : FMT_J<0b110, 0b00000, (outs), (ins),
-  "eret", "", [(sodium_eret)]>, Sched<[WriteJmp, ReadJmp]>;
+  "eret", "", [(sodium_eret)]>, Sched<[WriteBranch, ReadBranch]>;
 }
 
 //===----------------------------------------------------------------------===//
 // Instructions related to Flags, which have no fixups.
 //===----------------------------------------------------------------------===//
 let isBarrier = 1, isBranch = 1, isTerminator = 1 in
-def PseudoBR : Pseudo<(outs), (ins simm25_jump:$imm25), "", "",
-                [(br bb:$imm25)]>,
+def PseudoBR : Pseudo<(outs), (ins simm25_jump:$imm25), "", "", [(br bb:$imm25)]>,
                 PseudoInstExpansion<(B simm25_jump:$imm25)>;  //jump flag => B offset(flag)
 
 let isBarrier = 1, isBranch = 1, isIndirectBranch = 1, isTerminator = 1 in
@@ -487,30 +486,30 @@ def CBLE : CondB_ri<0b111, "cble">;
 //===----------------------------------------------------------------------===//
 // Expanded(expand at emit level, and share one fixup) at XXXMCCodeEmitter.cpp
 let isBarrier = 1, isBranch = 1, isIndirectBranch = 1, isTerminator = 1, Size = 8 in
-def PseudoJump : Pseudo<(outs), (ins jump_symbol:$dst),     //which is rare in use
+def PseudoJump : Pseudo<(outs), (ins jump_symbol:$dst),       //which is rare in use
                 "jmp", "$dst", []>,
-                Sched<[WriteJmp, ReadJmp]>;                 //brind sym => BR (AUIPC %hi(sym)), %lo(sym),   relax to BR X0, offset(sym)
-                                                            // formed by insertIndirectBranch, expanded by expandFunctionCall
+                Sched<[WriteBranch, ReadBranch]>;             //brind sym => BR (AUIPC %hi(sym)), %lo(sym),   relax to BR X0, offset(sym)
+                                                              // formed by insertIndirectBranch, expanded by expandFunctionCall
 let isCall = 1, Size = 8 in
 def PseudoCall : Pseudo<(outs), (ins call_symbol:$dst),
                 "call", "$dst", []>,
-                Sched<[WriteIALU, WriteJmp]>;               //call sym  => BLR (AUIPC %hi(sym)), %lo(sym),  relax to BL offset(sym)
+                Sched<[WriteIALU, WriteBranch]>;              //call sym  => BLR (AUIPC %hi(sym)), %lo(sym),  relax to BL offset(sym)
 let isCall = 1 in
 def PseudoCallIndirect : Pseudo<(outs), (ins IntRegs:$rb), "", "",
                 [(sodium_call IntRegs:$rb)]>,
-                PseudoInstExpansion<(BLR IntRegs:$rb, 0)>;  //call (sym) => BLR $rb(sym), 0
+                PseudoInstExpansion<(BLR IntRegs:$rb, 0)>;    //call (sym) => BLR $rb(sym), 0
 
 let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Size = 8 in
 def PseudoTail : Pseudo<(outs), (ins call_symbol:$dst),
                 "tail", "$dst", []>,
-                 Sched<[WriteIALU, WriteJmp, ReadJmp]>;     //tail sym  => BLR (AUIPC %hi(sym)), %lo(sym),  relax to BL offset(sym)
+                 Sched<[WriteIALU, WriteBranch, ReadBranch]>; //tail sym  => BLR (AUIPC %hi(sym)), %lo(sym),  relax to BL offset(sym)
 
 // Expanded at XXXExpandPseudoInsts.cpp
 let Size = 8 in {
 def PseudoLGA : Pseudo<(outs IntRegs:$dst), (ins bare_symbol:$src),
                 "lga", "$dst, $src", []>;
 def PseudoLLA : Pseudo<(outs IntRegs:$dst), (ins bare_symbol:$src),
-                "lla", "$dst, $src", []>;                   //l?a sym   => ADDI (AUIPC %hi(sym)), %lo(sym)
+                "lla", "$dst, $src", []>;                     //l?a sym   => ADDI (AUIPC %hi(sym)), %lo(sym)
 }
 
 //===----------------------------------------------------------------------===//
