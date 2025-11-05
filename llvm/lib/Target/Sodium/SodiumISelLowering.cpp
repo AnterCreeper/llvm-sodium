@@ -397,11 +397,11 @@ SDValue SodiumTargetLowering::LowerVASTART(SDValue Op, SelectionDAG &DAG) const 
 #include "SodiumISelLoweringOpt.h"
 
 static SDValue performADDCombine(SDNode *N, SelectionDAG &DAG) {
-  // fold (add (shl x, c0), (shl y, c1)) ->
-  //      (SLLI (SHADD x, y, diff), c0), if c1-c0 within 1 to 8.
+  // fold add (shl x, c0), (shl y, c1) =>
+  //      SLLI (SHADD x, y, diff), c0, if c1-c0 within 1 to 8.
   if (SDValue V = combineAddShlImm(N, DAG))
     return V;
-  // fold (add (xor (setcc X, Y), 1) -1) -> (neg (setcc X, Y)).
+  // fold add (xor (setcc X, Y), 1), -1 => neg (setcc X, Y).
   if (SDValue V = combineAddOfBooleanXor(N, DAG))
     return V;
   return SDValue();
@@ -410,7 +410,7 @@ static SDValue performADDCombine(SDNode *N, SelectionDAG &DAG) {
 static SDValue performSUBCombine(SDNode *N, SelectionDAG &DAG) {
   SDValue N0 = N->getOperand(0);
   SDValue N1 = N->getOperand(1);
-  // fold (sub 0, (setcc x, 0, setlt)) -> (sra x, xlen - 1)
+  // fold sub 0, (setcc x, 0, setlt) => sra x, xlen - 1
   if (isNullConstant(N0) && N1.getOpcode() == ISD::SETCC && N1.hasOneUse() &&
       isNullConstant(N1.getOperand(1))) {
     ISD::CondCode CCVal = cast<CondCodeSDNode>(N1.getOperand(2))->get();
@@ -437,7 +437,7 @@ static SDValue performLogicCombine(SDNode *N,
 static SDValue performXORCombine(SDNode *N, SelectionDAG &DAG) {
   SDValue N0 = N->getOperand(0);
   SDValue N1 = N->getOperand(1);
-  // fold (xor (sll 1, x), -1) -> (rol ~1, x)
+  // fold xor (sll 1, x), -1 => rol ~1, x
   if (N0.getOpcode() == ISD::SHL &&
       isAllOnesConstant(N1) && isOneConstant(N0.getOperand(0))) {
     SDLoc DL(N);
@@ -445,7 +445,7 @@ static SDValue performXORCombine(SDNode *N, SelectionDAG &DAG) {
     return DAG.getNode(ISD::ROTL, DL, VT,
                        DAG.getConstant(~1, DL, VT), N0.getOperand(1));
   }
-  // fold (xor (setcc constant, y, setlt), 1) -> (setcc y, constant + 1, setlt)
+  // fold xor (setcc constant, y, setlt), 1 => setcc y, constant + 1, setlt
   if (N0.hasOneUse() && N0.getOpcode() == ISD::SETCC && isOneConstant(N1)) {
     auto *ConstN00 = dyn_cast<ConstantSDNode>(N0.getOperand(0));
     ISD::CondCode CC = cast<CondCodeSDNode>(N0.getOperand(2))->get();
@@ -478,14 +478,14 @@ static SDValue performMULCombine(SDNode *N,
   SDValue Res;
   if (MulAmt >= 0) {
     if (llvm::has_single_bit<uint32_t>(MulAmt - 1)) {
-      // (mul x, 2^N + 1) => (add (shl x, N), x)
+      // fold mul x, 2^N + 1 => add (shl x, N), x
       Res = DAG.getNode(ISD::ADD, DL, VT,
                         DAG.getNode(ISD::SHL, DL, VT,
                                     X,
                                     DAG.getConstant(Log2_32(MulAmt - 1), DL, MVT::i16)),
                         X);
     } else if (llvm::has_single_bit<uint32_t>(MulAmt + 1)) {
-      // (mul x, 2^N - 1) => (sub (shl x, N), x)
+      // fold mul x, 2^N - 1 => sub (shl x, N), x
       Res = DAG.getNode(ISD::SUB, DL, VT,
                         DAG.getNode(ISD::SHL, DL, VT,
                                     X,
@@ -496,7 +496,7 @@ static SDValue performMULCombine(SDNode *N,
   } else {
     uint64_t MulAmtAbs = -MulAmt;
     if (llvm::has_single_bit<uint32_t>(MulAmtAbs + 1)) {
-      // (mul x, -(2^N - 1)) => (sub x, (shl x, N))
+      // fold mul x, -(2^N - 1) => sub x, (shl x, N)
       Res = DAG.getNode(ISD::SUB, DL, VT,
                         X,
                         DAG.getNode(ISD::SHL, DL, VT,
@@ -525,8 +525,8 @@ static SDValue performMemPairCombine(SDNode *N,
 static bool performCCCombine(SDValue &LHS, SDValue &RHS, SDValue &CC,
                              const SDLoc &DL, SelectionDAG &DAG) {
   ISD::CondCode CCVal = cast<CondCodeSDNode>(CC)->get();
-  // fold setlt (sra X, N), 0 -> setlt X, 0 and
-  //      setge (sra X, N), 0 -> setge X, 0
+  // fold setlt (sra X, N), 0 => setlt X, 0 and
+  //      setge (sra X, N), 0 => setge X, 0
   if (auto *RHSConst = dyn_cast<ConstantSDNode>(RHS.getNode())) {
     if ((CCVal == ISD::SETGE || CCVal == ISD::SETLT) &&
         LHS.getOpcode() == ISD::SRA && RHSConst->isZero()) {

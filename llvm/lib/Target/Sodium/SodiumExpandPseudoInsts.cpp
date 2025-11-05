@@ -120,19 +120,22 @@ bool SodiumExpandPseudo::expandAuipcInstPair(MachineBasicBlock &MBB,
   MachineFunction *MF = MBB.getParent();
 
   Register DestReg = MI.getOperand(0).getReg();
-  MachineOperand &Symbol = MI.getOperand(1);
+  Register ScratchReg =
+    MF->getRegInfo().createVirtualRegister(&Sodium::IntRegsRegClass);
 
+  MachineOperand &Symbol = MI.getOperand(1);
   Symbol.setTargetFlags(FlagsHi);
   MCSymbol *AUIPCSymbol = MF->getContext().createNamedTempSymbol("pcrel_hi");
 
   MachineInstr *MIAUIPC =
-    BuildMI(MBB, MBBI, DL, TII->get(Sodium::AUIPC), DestReg).add(Symbol);
+    BuildMI(MBB, MBBI, DL, TII->get(Sodium::AUIPC), ScratchReg).add(Symbol);
   MIAUIPC->setPreInstrSymbol(*MF, AUIPCSymbol);
 
   MachineInstr *SecondMI =
     BuildMI(MBB, MBBI, DL, TII->get(SecondOpcode), DestReg)
-    .addReg(DestReg)
+    .addReg(ScratchReg)
     .addSym(AUIPCSymbol, SODIUMII::MO_PCREL_LO);
+
   if (MI.hasOneMemOperand())
     SecondMI->addMemOperand(*MF, *MI.memoperands_begin());
 

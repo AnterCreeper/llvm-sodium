@@ -114,17 +114,17 @@ class FMT_R<bits<3> func3, bits<3> tag3, bits<7> flag7, dag outs, dag ins, strin
   let Inst{8-4}   = rd;
 }
 
-//variation of FMT_R for shadd
-class FMT_S<bits<3> func3, bits<7> flag7, dag outs, dag ins, string opcodestr, string argstr>
+//variation of FMT_R with 7bit immediate
+class FMT_RRI<bits<3> func3, bits<3> tag3, dag outs, dag ins, string opcodestr, string argstr>
   : SodiumInst<outs, ins, opcodestr, argstr, []>
 {
-  bits<3> shamt3;
   bits<5> rd;
   bits<5> rs1;
   bits<5> rs2;
+  bits<7> flag7;
 
   let opcode      = 0b0111;
-  let Inst{31-29} = shamt3;
+  let Inst{31-29} = tag3;
   let Inst{28-22} = flag7;
   let Inst{21-17} = rs2;
   let Inst{16-12} = rs1;
@@ -148,20 +148,23 @@ class FMT_I<bits<3> func3, bits<3> tag3, dag outs, dag ins, string opcodestr, st
   let Inst{8-4}   = rd;
 }
 
-//variation of FMT_I with 7bit flag as immediate
-class FMT_RI<bits<3> func3, bits<3> tag3, dag outs, dag ins, string opcodestr, string argstr>
+//variation of FMT_I for UBFX/SBFX
+class FMT_II<bits<3> func3, bits<3> tag3, dag outs, dag ins, string opcodestr, string argstr>
   : SodiumInst<outs, ins, opcodestr, argstr, []>
 {
+  bits<4> lsb;
+  bits<4> len;
   bits<5> rd;
-  bits<5> rs1;
-  bits<5> rs2;
-  bits<7> flag7;
+  bits<5> rs;
 
-  let opcode      = 0b0111;
-  let Inst{31-29} = tag3;
-  let Inst{28-22} = flag7;
-  let Inst{21-17} = rs2;
-  let Inst{16-12} = rs1;
+  let opcode      = 0b1111;
+  let Inst{31-30} = tag3{2-1};
+  let Inst{29}    = len{0};   //imm[0]
+  let Inst{28}    = 0;        //imm[12]
+  let Inst{27-24} = lsb;      //imm[11:8]
+  let Inst{23-20} = 0;        //imm[7:4]
+  let Inst{19-17} = len{3-1}; //imm[3:1]
+  let Inst{16-12} = rs;
   let Inst{11-9}  = func3;
   let Inst{8-4}   = rd;
 }

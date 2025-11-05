@@ -61,7 +61,7 @@ class SodiumPassConfig : public TargetPassConfig {
 public:
   SodiumPassConfig(SodiumTargetMachine &TM, PassManagerBase &PM)
     : TargetPassConfig(TM, PM) {}
-  void addPreEmitPass() override {
+  void addPreRegAlloc() override {
     addPass(createSodiumExpandPseudoPass());
   }
   bool addInstSelector() override {

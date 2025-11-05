@@ -21,6 +21,7 @@ include "SodiumInstrFormats.td"
 //===----------------------------------------------------------------------===//
 // SDTypeProfile<numresults, numoperands, constraints>
 def SDTCall : SDTypeProfile<0, -1, [SDTCisVT<0, XLenVT>]>;
+def SDTBFX : SDTypeProfile<1, 3, [SDTCisVT<0, i16>]>;
 def SDTBFPK : SDTypeProfile<1, 3, [SDTCisVT<0, i16>, SDTCisVT<1, i16>]>;
 def SDTCallSeq_End : SDCallSeqEnd<[SDTCisVT<0, i16>, SDTCisVT<1, i16>]>;
 def SDTCallSeq_Start : SDCallSeqStart<[SDTCisVT<0, i16>, SDTCisVT<1, i16>]>;
@@ -42,8 +43,8 @@ def sodium_lga : SDNode<"SodiumISD::LGA", SDTLoad,
 
 def sodium_bfpk : SDNode<"SodiumISD::BFPK", SDTBFPK>;
 def sodium_bfmg : SDNode<"SodiumISD::BFMG", SDTIntBinOp>;
-def sodium_sbfx : SDNode<"SodiumISD::SBFX", SDTIntBinOp>;
-def sodium_ubfx : SDNode<"SodiumISD::UBFX", SDTIntBinOp>;
+def sodium_sbfx : SDNode<"SodiumISD::SBFX", SDTBFX>;
+def sodium_ubfx : SDNode<"SodiumISD::UBFX", SDTBFX>;
 
 // Target-independent nodes, but with target-specific formats.
 def callseq_end : SDNode<"ISD::CALLSEQ_END", SDTCallSeq_End,
@@ -74,9 +75,9 @@ class UImmAsmOperand<int width, string suffix = "">
   : ImmAsmOperand<"U", width, suffix> {
 }
 
-class UImm7Operand : Operand<i16>,
-    ImmLeaf<i16, [{return isInt<7>(Imm);}]> {
-  let DecoderMethod = "decodeUImmOperand<7>";
+class UImm4Operand : Operand<i16>,
+    ImmLeaf<i16, [{return isInt<4>(Imm);}]> {
+  let DecoderMethod = "decodeUImmOperand<4>";
 }
 
 class SImm13Operand : Operand<i16>,
@@ -87,10 +88,10 @@ class SImm13Operand : Operand<i16>,
 //===----------------------------------------------------------------------===//
 // Immediate Operand Definition
 //===----------------------------------------------------------------------===//
-def uimm7 : UImm7Operand {
-  let ParserMatchClass = UImmAsmOperand<7>;
+def uimm4 : UImm4Operand {
+  let ParserMatchClass = UImmAsmOperand<4>;
   let EncoderMethod = "getImmOpValue";
-  let DecoderMethod = "decodeSImmOperand<7>";
+  let DecoderMethod = "decodeSImmOperand<4>";
 }
 
 def simm13 : SImm13Operand {
@@ -236,6 +237,11 @@ class ALU_ri<bits<3> func3, bits<3> tag3, string opcodestr>
               opcodestr, "$rd, $rs, $imm13">,
       Sched<[WriteIALU, ReadIALU]>;
 
+class ALU_rii<bits<3> func3, bits<3> tag3, string opcodestr>
+    : FMT_II<func3, tag3, (outs IntRegs:$rd), (ins IntRegs:$rs, uimm4:$lsb, uimm4:$len),
+              opcodestr, "$rd, $rs, $lsb, $len">,
+      Sched<[WriteIALU, ReadIALU]>;
+
 class ALUd_di<bits<3> func3, bits<3> tag3, string opcodestr>
     : FMT_I<func3, tag3, (outs IntPair:$rd), (ins IntPair:$rs, simm13:$imm13),
               opcodestr, "$rd, $rs, $imm13">,
@@ -247,7 +253,12 @@ class ALU_rr<bits<3> func3, bits<3> tag3, bits<7> flag7, string opcodestr>
       Sched<[WriteIALU, ReadIALU, ReadIALU]>;
 
 class ALU_rri<bits<3> func3, bits<3> tag3, string opcodestr>
-    : FMT_RI<func3, tag3, (outs IntRegs:$rd), (ins IntRegs:$rs1, IntRegs:$rs2, uimm7:$flag7),
+    : FMT_RRI<func3, tag3, (outs IntRegs:$rd), (ins IntRegs:$rs1, IntRegs:$rs2, uimm4:$flag7),
+              opcodestr, "$rd, $rs1, $rs2, $flag7">,
+      Sched<[WriteIALU, ReadIALU, ReadIALU]>;
+
+class SHADD_rri<bits<3> func3, bits<3> tag3, string opcodestr>
+    : FMT_RRI<func3, tag3, (outs IntRegs:$rd), (ins IntRegs:$rs1, IntRegs:$rs2, uimm3_plus1:$flag7),
               opcodestr, "$rd, $rs1, $rs2, $flag7">,
       Sched<[WriteIALU, ReadIALU, ReadIALU]>;
 
@@ -267,11 +278,6 @@ class ALU_r<bits<3> func3, bits<3> tag3, bits<7> flag7, string opcodestr>
       Sched<[WriteIALU, ReadIALU]> {
   let rs2 = 0b00000;
 }
-
-class SHADD_rr<bits<3> func3, bits<7> flag7, string opcodestr>
-    : FMT_S<func3, flag7, (outs IntRegs:$rd), (ins IntRegs:$rs1, IntRegs:$rs2, uimm3_plus1:$shamt3),
-              opcodestr, "$rd, $rs1, $rs2, $shamt3">,
-      Sched<[WriteIALU, ReadIALU, ReadIALU]>;
 
 class CMOV_rr<bits<3> func3, bits<3> tag3, bits<7> flag7, string opcodestr>
     : FMT_R<func3, tag3, flag7, (outs IntRegs:$rd), (ins IntRegs:$T, IntRegs:$rs1, IntRegs:$rs2),
@@ -367,12 +373,8 @@ let IsSignExt = 1 in {
   def SLTI : ALU_ri<0b000, 0b100, "slti">;
   def SLTUI : ALU_ri<0b000, 0b110, "sltui">;
 }
-def SBB: ALUd_rr<0b000, 0b111, 0, "sbb">;
-def ADC: ALUd_rr<0b000, 0b101, 0, "adc">;
 def ADD32 : ALUd_dr<0b000, 0b010, 0, "add.32">;
 def SUB32 : ALUd_dr<0b000, 0b001, 0, "sub.32">;
-
-def SHADD : SHADD_rr<0b110, 0, "shadd">;
 def ADDI32 : ALUd_di<0b000, 0b010, "addi.32">;
 
 //Shift
@@ -384,6 +386,7 @@ def SLLI : ALU_ri<0b010, 0b000, "slli">;
 def SRLI : ALU_ri<0b010, 0b010, "srli">;
 def SRAI : ALU_ri<0b010, 0b100, "srai">;
 def ROLI : ALU_ri<0b010, 0b110, "roli">;
+def SHADD : SHADD_rri<0b010, 0b111, "shadd">;
 
 //Logical
 def OR : ALU_rr<0b001, 0b000, 0, "or">;
@@ -408,18 +411,16 @@ def MULHI : ALU_ri<0b011, 0b100, "mulhi">;
 //def MULHUSI : ALU_ri<0b011, 0b110, "mulhusi">;
 
 //Bitmanipulation
+def REV : ALU_r<0b101, 0b011, 0, "rev">;
+def CLZ : ALU_r<0b101, 0b101, 0, "clz">;
+def SBFX : ALU_rii<0b101, 0b000, "sbfx">;
+def UBFX : ALU_rii<0b101, 0b010, "ubfx">;
+def BFPK : ALU_rri<0b101, 0b111, "pack">;
 def MIN : ALU_rr<0b101, 0b001, 0, "min">;
 def MAX : ALU_rr<0b101, 0b001, 2, "max">;
 def MINU : ALU_rr<0b101, 0b001, 1, "minu">;
 def MAXU : ALU_rr<0b101, 0b001, 3, "maxu">;
-def REV : ALU_r <0b101, 0b011, 0, "rev">;
-def CLZ : ALU_r <0b101, 0b101, 0, "clz">;
-def SBFX : ALU_rr<0b101, 0b000, 0, "sbfx">;
-def UBFX : ALU_rr<0b101, 0b010, 0, "ubfx">;
-def SBFXI : ALU_ri<0b101, 0b000, "sbfxi">;
-def UBFXI : ALU_ri<0b101, 0b010, "ubfxi">;
-//$rd = {$rs2[15-shamt:0], $rs1[$shamt-1:0]};
-def BFPK : ALU_rri<0b101, 0b111, "bfpk">;
+
 //alias of ((1<<x)-1)<<y == {16-x-y'b0, {x{1'b1}}, y'b0};
 //ex: bfmgi $zero, 1, 4 = 0b00011110 = {3'b0, 4'b0, 1'b0}
 def BFMG : ALU_rr<0b101, 0b110, 0, "bfmg">;
@@ -682,8 +683,8 @@ def ImmSubFrom16 : SDNodeXForm<imm, [{
 def : Pat<(i16 (rotr IntRegs:$rs1, IntRegs:$rs2)),  (ROL IntRegs:$rs1, (SUB X0, IntRegs:$rs2))>;
 def : Pat<(i16 (rotr IntRegs:$rs1, simm13:$imm13)), (ROLI IntRegs:$rs1, (ImmSubFrom16 simm13:$imm13))>;
 
-def : Pat<(i16 (add (shl (i16 IntRegs:$rs1), uimm3_plus1:$shamt), (i16 IntRegs:$rs2))),
-  (SHADD IntRegs:$rs1, IntRegs:$rs2, uimm3_plus1:$shamt)>;
+def : Pat<(i16 (add (shl (i16 IntRegs:$rs1), uimm3_plus1:$flag7), (i16 IntRegs:$rs2))),
+  (SHADD IntRegs:$rs1, IntRegs:$rs2, uimm3_plus1:$flag7)>;
 
 //Muplication
 def : PatRegReg<mul, MUL>;
@@ -701,20 +702,19 @@ def : PatRegReg<umin, MINU>;
 def : PatRegReg<umax, MAXU>;
 def : Pat<(i16 (cttz (i16 IntRegs:$rs))),  (CLZ (REV IntRegs:$rs))>;
 def : Pat<(i16 (bswap (i16 IntRegs:$rs))), (ROLI IntRegs:$rs, 8)>;
-def : Pat<(i16 (sodium_bfpk (i16 IntRegs:$rs1), (i16 IntRegs:$rs2), uimm7:$flag7)),
-  (BFPK IntRegs:$rs1, IntRegs:$rs2, uimm7:$flag7)>;
+def : Pat<(i16 (sodium_bfpk (i16 IntRegs:$rs1), (i16 IntRegs:$rs2), uimm4:$flag7)),
+  (BFPK IntRegs:$rs1, IntRegs:$rs2, uimm4:$flag7)>;
+
+def : Pat<(sodium_sbfx IntRegs:$rs, uimm4:$lsb, uimm4:$len), (SBFX IntRegs:$rs, uimm4:$lsb, uimm4:$len)>;
+def : Pat<(sodium_ubfx IntRegs:$rs, uimm4:$lsb, uimm4:$len), (UBFX IntRegs:$rs, uimm4:$lsb, uimm4:$len)>;
 
 def : PatRegReg<sodium_bfmg, BFMG>;
-def : PatRegReg<sodium_sbfx, SBFX>;
-def : PatRegReg<sodium_ubfx, UBFX>;
-def : PatRegSimm13<sodium_sbfx, SBFXI>;
-def : PatRegSimm13<sodium_ubfx, UBFXI>;
 def : PatRegSimm13<sodium_bfmg, BFMGI>;
 
 def zexti8 : ComplexPattern<i16, 1, "SelectZExtBits<8>">;
 def : Pat<(i16 (or (zexti8 (i16 IntRegs:$rs1)), (shl IntRegs:$rs2, (i16 8)))),
   (BFPK IntRegs:$rs1, IntRegs:$rs2, 8)>;
-def : Pat<(i16 (sext_inreg IntRegs:$rs1, i8)), (SBFXI IntRegs:$rs1, 0x0700)>; //sext.8 $rs1 = sbfx $rs1, 7+0, 0
+def : Pat<(i16 (sext_inreg IntRegs:$rs1, i8)), (SBFX IntRegs:$rs1, 0, 7)>; //sext.8 $rs1 = sbfx $rs1, 0, 7
 
 def : Pat<(i16 (and IntRegs:$rs1, (not IntRegs:$rs2))), (ANDN IntRegs:$rs1, IntRegs:$rs2)>;
 def : Pat<(i16 (or  IntRegs:$rs1, (not IntRegs:$rs2))), (ORN  IntRegs:$rs1, IntRegs:$rs2)>;

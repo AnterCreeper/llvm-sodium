@@ -35,8 +35,6 @@ static SDValue SelectImm(SelectionDAG *CurDAG, const SDLoc &DL, const MVT VT,
                                                    CurDAG->getTargetConstant(Lo13, DL, VT)), 0);
     return AddiOp;
   }
-
-  // Expand to a constant pool using the default expansion code.
   return SDValue();
 }
 
@@ -70,6 +68,25 @@ void SodiumDAGToDAGISel::Select(SDNode *Node) {
     ReplaceNode(Node, CurDAG->getMachineNode(Sodium::ADDI, DL, VT, TFI, Imm));
     return;
   }
+  case ISD::OR:
+    if (tryShrinkShlLogicImm(CurDAG, Node, Sodium::ORI)) return;
+    break;
+  case ISD::XOR:
+    if (tryShrinkShlLogicImm(CurDAG, Node, Sodium::XORI)) return;
+    break;
+  case ISD::AND:
+    if (tryBitfieldExtractOpfromAND(CurDAG, Node)) return;
+    if (tryShrinkShlLogicImm(CurDAG, Node, Sodium::ANDI)) return;
+    break;
+  case ISD::SRA:
+    if (tryBitfieldExtractOpfromSHR(CurDAG, Node, true)) return;
+    break;
+  case ISD::SRL:
+    if (tryBitfieldExtractOpfromSHR(CurDAG, Node, false)) return;
+    break;
+  case ISD::SIGN_EXTEND_INREG:
+    if (tryBitfieldExtractOpfromSExtInReg(CurDAG, Node)) return;
+    break;
   }
   // Select the default instruction.
   SelectCode(Node);
