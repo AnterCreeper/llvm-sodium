@@ -28,8 +28,7 @@ enum NodeType : unsigned {
   Tail,
   Ret,
   ERet,
-  LLA, //Local
-  LGA = ISD::FIRST_TARGET_MEMORY_OPCODE, //GOT
+  LLA,
   BFPK,
   BFMG,
   SBFX,
@@ -74,6 +73,18 @@ public:
   Register getExceptionSelectorRegister(const Constant *PersonalityFn) const override {
     return Sodium::X11;
   }
+
+  ConstraintType getConstraintType(StringRef Constraint) const override;
+  std::pair<unsigned, const TargetRegisterClass *>
+  getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
+                               StringRef Constraint, MVT VT) const override;
+
+  void LowerAsmOperandForConstraint(SDValue Op, std::string &Constraint,
+                                    std::vector<SDValue> &Ops,
+                                    SelectionDAG &DAG) const override;
+  bool isLegalAddressingMode(const DataLayout &DL, const AddrMode &AM, Type *Ty,
+                             unsigned AS,
+                             Instruction *I = nullptr) const override;
 
 private:
   template<typename T>

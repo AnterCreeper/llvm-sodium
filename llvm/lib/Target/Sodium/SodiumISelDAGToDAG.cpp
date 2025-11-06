@@ -12,6 +12,7 @@
 
 #include "SodiumISelDAGToDAG.h"
 #include "SodiumISelLowering.h"
+#include "llvm/Support/KnownBits.h"
 #include "MCTargetDesc/SodiumMCTargetDesc.h"
 
 using namespace llvm;
@@ -36,6 +37,37 @@ static SDValue SelectImm(SelectionDAG *CurDAG, const SDLoc &DL, const MVT VT,
     return AddiOp;
   }
   return SDValue();
+}
+
+bool SodiumDAGToDAGISel::SelectInlineAsmMemoryOperand(const SDValue &Op, unsigned ConstraintID,
+                                                      std::vector<SDValue> &OutOps) {
+  // Always produce a register and immediate operand, as expected by
+  // SodiumAsmPrinter::PrintAsmMemoryOperand.
+  SDValue Base = Op;
+  SDValue Offset =
+    CurDAG->getTargetConstant(0, SDLoc(Op), Op.getValueType());
+  switch (ConstraintID) {
+  default:
+    report_fatal_error("Unexpected asm memory constraint " +
+                       InlineAsm::getMemConstraintName(ConstraintID));
+  // Reg+simm13 addressing.
+  case InlineAsm::Constraint_o:
+  case InlineAsm::Constraint_m:
+    if (CurDAG->isBaseWithConstantOffset(Op)) {
+      ConstantSDNode *CN = dyn_cast<ConstantSDNode>(Op.getOperand(1));
+      if (isIntN(13, CN->getSExtValue())) {
+        Base = Op.getOperand(0);
+        Offset = CurDAG->getTargetConstant(CN->getZExtValue(), SDLoc(Op),
+                                           Op.getValueType());
+      }
+    }
+    break;
+  case InlineAsm::Constraint_A:
+    break;
+  }
+  OutOps.push_back(Base);
+  OutOps.push_back(Offset);
+  return false;
 }
 
 #include "SodiumISelDAGToDAGOpt.h"
@@ -69,6 +101,7 @@ void SodiumDAGToDAGISel::Select(SDNode *Node) {
     return;
   }
   case ISD::OR:
+    if (tryBitfieldPackfromOrSHL(CurDAG, Node)) return;
     if (tryShrinkShlLogicImm(CurDAG, Node, Sodium::ORI)) return;
     break;
   case ISD::XOR:

@@ -39,6 +39,12 @@ unsigned SodiumInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   if (MI.isMetaInstruction())
     return 0;
   unsigned Opcode = MI.getOpcode();
+  if (Opcode == TargetOpcode::INLINEASM ||
+      Opcode == TargetOpcode::INLINEASM_BR) {
+    const MachineFunction &MF = *MI.getParent()->getParent();
+    return getInlineAsmLength(MI.getOperand(0).getSymbolName(),
+                              *MF.getTarget().getMCAsmInfo());
+  }
   if (Opcode == TargetOpcode::BUNDLE)
     return getInstBundleLength(MI);
 
@@ -110,26 +116,13 @@ void SodiumInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
     .addMemOperand(MMO);
 }
 
-void SodiumInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
-                                  MachineBasicBlock::iterator I,
-                                  const DebugLoc &DL, MCRegister DstReg,
-                                  MCRegister SrcReg, bool KillSrc) const {
-  if (Sodium::IntRegsRegClass.contains(DstReg, SrcReg)) {
-    BuildMI(MBB, I, DL, get(Sodium::ADDI), DstReg)
-        .addReg(SrcReg, getKillRegState(KillSrc))
-        .addImm(0);
-    return;
-  }
-  assert("copyPhysReg failed!");
-}
-
-void SodiumInstrInfo::parseCondBranch(MachineInstr *LastInst,
+void SodiumInstrInfo::parseCondBranch(MachineInstr &LastInst,
                                       MachineBasicBlock *&TBB,
                                       SmallVectorImpl<MachineOperand> &Cond) const {
   // Block ends with fall-through condbranch.
-  TBB = LastInst->getOperand(1).getMBB();
-  Cond.push_back(MachineOperand::CreateImm(LastInst->getOpcode())); //Cond[0]
-  Cond.push_back(LastInst->getOperand(0));                          //Cond[1]
+  TBB = LastInst.getOperand(1).getMBB();
+  Cond.push_back(MachineOperand::CreateImm(LastInst.getOpcode())); //Cond[0]
+  Cond.push_back(LastInst.getOperand(0));                          //Cond[1]
 }
 
 void SodiumInstrInfo::instantiateCondBranch(MachineBasicBlock &MBB,
@@ -140,113 +133,71 @@ void SodiumInstrInfo::instantiateCondBranch(MachineBasicBlock &MBB,
   BuildMI(&MBB, DL, get(Cond[0].getImm())).add(Cond[1]).addMBB(TBB);
 }
 
-// derived from AArch64 Target.
 bool SodiumInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
                                     MachineBasicBlock *&TBB,
                                     MachineBasicBlock *&FBB,
                                     SmallVectorImpl<MachineOperand> &Cond,
                                     bool AllowModify) const {
+  TBB = FBB = nullptr;
+  Cond.clear();
+
   // If the block has no terminators, it just falls into the block after it.
   MachineBasicBlock::iterator I = MBB.getLastNonDebugInstr();
   if (I == MBB.end() || !isUnpredicatedTerminator(*I))
     return false;
 
-  // Get the last instruction in the block.
-  MachineInstr *LastInst = &*I;
-
-  // If there is only one terminator instruction, process it.
-  unsigned LastOpc = LastInst->getOpcode();
-  if (I == MBB.begin() || !isUnpredicatedTerminator(*--I)) {
-    if (isUncondBranchOpcode(LastOpc)) {
-      TBB = LastInst->getOperand(0).getMBB();
-      return false;
-    }
-    if (isCondBranchOpcode(LastOpc)) {
-      // Block ends with fall-through condbranch.
-      parseCondBranch(LastInst, TBB, Cond);
-      return false;
-    }
-    return true; // Can't handle indirect branch.
-  }
-
-  // Get the instruction before it if it is a terminator.
-  MachineInstr *SecondLastInst = &*I;
-  unsigned SecondLastOpc = SecondLastInst->getOpcode();
-
-  // If AllowModify is true and the block ends with two or more unconditional
-  // branches, delete all but the first unconditional branch.
-  if (AllowModify && isUncondBranchOpcode(LastOpc)) {
-    while (isUncondBranchOpcode(SecondLastOpc)) {
-      LastInst->eraseFromParent();
-      LastInst = SecondLastInst;
-      LastOpc = LastInst->getOpcode();
-      if (I == MBB.begin() || !isUnpredicatedTerminator(*--I)) {
-        // Return now the only terminator is an unconditional branch.
-        TBB = LastInst->getOperand(0).getMBB();
-        return false;
-      } else {
-        SecondLastInst = &*I;
-        SecondLastOpc = SecondLastInst->getOpcode();
-      }
+  // Count the number of terminators and find the first unconditional or
+  // indirect branch.
+  MachineBasicBlock::iterator FirstUncondOrIndirectBr = MBB.end();
+  int NumTerminators = 0;
+  for (auto J = I.getReverse(); J != MBB.rend() && isUnpredicatedTerminator(*J);
+       J++) {
+    NumTerminators++;
+    if (J->getDesc().isUnconditionalBranch() ||
+        J->getDesc().isIndirectBranch()) {
+      FirstUncondOrIndirectBr = J.getReverse();
     }
   }
 
-  // If we're allowed to modify and the block ends in a unconditional branch
-  // which could simply fallthrough, remove the branch.  (Note: This case only
-  // matters when we can't understand the whole sequence, otherwise it's also
-  // handled by BranchFolding.cpp.)
-  if (AllowModify && isUncondBranchOpcode(LastOpc) &&
-      MBB.isLayoutSuccessor(getBranchDestBlock(*LastInst))) {
-    LastInst->eraseFromParent();
-    LastInst = SecondLastInst;
-    LastOpc = LastInst->getOpcode();
-    if (I == MBB.begin() || !isUnpredicatedTerminator(*--I)) {
-      assert(!isUncondBranchOpcode(LastOpc) &&
-             "unreachable unconditional branches removed above");
-
-      if (isCondBranchOpcode(LastOpc)) {
-        // Block ends with fall-through condbranch.
-        parseCondBranch(LastInst, TBB, Cond);
-        return false;
-      }
-      return true; // Can't handle indirect branch.
-    } else {
-      SecondLastInst = &*I;
-      SecondLastOpc = SecondLastInst->getOpcode();
+  // If AllowModify is true, we can erase any terminators after
+  // FirstUncondOrIndirectBR.
+  if (AllowModify && FirstUncondOrIndirectBr != MBB.end()) {
+    while (std::next(FirstUncondOrIndirectBr) != MBB.end()) {
+      std::next(FirstUncondOrIndirectBr)->eraseFromParent();
+      NumTerminators--;
     }
+    I = FirstUncondOrIndirectBr;
   }
 
-  // If there are three terminators, we don't know what sort of block this is.
-  if (SecondLastInst && I != MBB.begin() && isUnpredicatedTerminator(*--I))
+  // We can't handle blocks that end in an indirect branch.
+  if (I->getDesc().isIndirectBranch())
     return true;
 
-  // If the block ends with a B and a cond B, handle it.
-  if (isCondBranchOpcode(SecondLastOpc) && isUncondBranchOpcode(LastOpc)) {
-    parseCondBranch(SecondLastInst, TBB, Cond);
-    FBB = LastInst->getOperand(0).getMBB();
+  // We can't handle blocks with more than 2 terminators.
+  if (NumTerminators > 2)
+    return true;
+
+  // Handle a single unconditional branch.
+  if (NumTerminators == 1 && I->getDesc().isUnconditionalBranch()) {
+    TBB = getBranchDestBlock(*I);
     return false;
   }
 
-  // If the block ends with two unconditional branches, handle it.  The second
-  // one is not executed, so remove it.
-  if (isUncondBranchOpcode(SecondLastOpc) && isUncondBranchOpcode(LastOpc)) {
-    TBB = SecondLastInst->getOperand(0).getMBB();
-    I = LastInst;
-    if (AllowModify)
-      I->eraseFromParent();
+  // Handle a single conditional branch.
+  if (NumTerminators == 1 && I->getDesc().isConditionalBranch()) {
+    parseCondBranch(*I, TBB, Cond);
     return false;
   }
 
-  // ...likewise if it ends with an indirect branch followed by an unconditional
-  // branch.
-  if (isIndirectBranchOpcode(SecondLastOpc) && isUncondBranchOpcode(LastOpc)) {
-    I = LastInst;
-    if (AllowModify)
-      I->eraseFromParent();
-    return true;
+  // Handle a conditional branch followed by an unconditional branch.
+  if (NumTerminators == 2 && std::prev(I)->getDesc().isConditionalBranch() &&
+      I->getDesc().isUnconditionalBranch()) {
+    parseCondBranch(*std::prev(I), TBB, Cond);
+    FBB = getBranchDestBlock(*I);
+    return false;
   }
 
-  // Otherwise, can't handle this.
+  // Otherwise, we can't handle this.
   return true;
 }
 
@@ -261,7 +212,7 @@ unsigned SodiumInstrInfo::insertBranch(MachineBasicBlock &MBB,
   // One-way branch.
   if (!FBB) {
     if (Cond.empty()) // Unconditional branch?
-      BuildMI(&MBB, DL, get(Sodium::B)).addMBB(TBB);
+      BuildMI(&MBB, DL, get(Sodium::PseudoBR)).addMBB(TBB);
     else
       instantiateCondBranch(MBB, TBB, Cond, DL);
     if (BytesAdded) *BytesAdded = 4;
@@ -269,7 +220,7 @@ unsigned SodiumInstrInfo::insertBranch(MachineBasicBlock &MBB,
   }
   // Two-way conditional branch.
   instantiateCondBranch(MBB, TBB, Cond, DL);
-  BuildMI(&MBB, DL, get(Sodium::B)).addMBB(FBB);
+  BuildMI(&MBB, DL, get(Sodium::PseudoBR)).addMBB(FBB);
   if (BytesAdded) *BytesAdded = 8;
   return 2;
 }
@@ -300,6 +251,19 @@ unsigned SodiumInstrInfo::removeBranch(MachineBasicBlock &MBB,
     *BytesRemoved += getInstSizeInBytes(*I);
   I->eraseFromParent();
   return 2;
+}
+
+void SodiumInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
+                                  MachineBasicBlock::iterator I,
+                                  const DebugLoc &DL, MCRegister DstReg,
+                                  MCRegister SrcReg, bool KillSrc) const {
+  if (Sodium::IntRegsRegClass.contains(DstReg, SrcReg)) {
+    BuildMI(MBB, I, DL, get(Sodium::ADDI), DstReg)
+        .addReg(SrcReg, getKillRegState(KillSrc))
+        .addImm(0);
+    return;
+  }
+  assert("copyPhysReg failed!");
 }
 
 /// This function generates the sequence of instructions needed to load

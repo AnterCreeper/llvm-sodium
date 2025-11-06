@@ -33,36 +33,32 @@ const SodiumMCExpr *SodiumMCExpr::create(const MCExpr *Expr, VariantKind Kind,
 
 StringRef SodiumMCExpr::getVariantKindName(VariantKind Kind) {
   switch (Kind) {
+  default:
+    llvm_unreachable("Missing ELF symbol kind");
   case VK_SODIUM_None:
   case VK_SODIUM_Invalid:
     llvm_unreachable("Invalid ELF symbol kind");
   case VK_SODIUM_CALL:
     return "call";
-  case VK_SODIUM_CALL_PLT:
-    return "call_plt";
   case VK_SODIUM_LO:
     return "lo";
   case VK_SODIUM_PCREL_LO:
     return "pcrel_lo";
   case VK_SODIUM_HI:
     return "hi";
-  case VK_SODIUM_GOT_HI:
-    return "got_pcrel_hi";
   case VK_SODIUM_PCREL_HI:
     return "pcrel_hi";
   }
   llvm_unreachable("Invalid ELF symbol kind");
+  return "";
 }
 
 void SodiumMCExpr::printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const {
   VariantKind Kind = getKind();
-  bool HasVariant = ((Kind != VK_SODIUM_None) && (Kind != VK_SODIUM_CALL) &&
-                    (Kind != VK_SODIUM_CALL_PLT));
+  bool HasVariant = ((Kind != VK_SODIUM_None) && (Kind != VK_SODIUM_CALL));
   if (HasVariant)
     OS << '%' << getVariantKindName(getKind()) << '(';
   Expr->print(OS, MAI);
-  if (Kind == VK_SODIUM_CALL_PLT)
-    OS << "@plt";
   if (HasVariant)
     OS << ')';
 }

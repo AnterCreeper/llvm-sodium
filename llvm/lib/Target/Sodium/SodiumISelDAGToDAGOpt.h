@@ -198,9 +198,7 @@ bool SodiumDAGToDAGISel::tryShrinkShlLogicImm(SelectionDAG *CurDAG, SDNode *Node
   return true;
 }
 
-#define GETBITS(x, n, m) ((x >> n) & ((1 << (m - n + 1)) - 1))
-
-//fold or (shl y, C1), x
+//fold or (sll y, C1), x
 //  => pack x, y, C1
 //
 //pack $rd, $rs1, $rs2, $shamt => $rd = {$rs2[15-shamt:0], $rs1[$shamt-1:0]};
@@ -214,14 +212,16 @@ bool SodiumDAGToDAGISel::tryBitfieldPackfromOrSHL(SelectionDAG *CurDAG, SDNode *
   if (N1.getOpcode() == ISD::SHL && N1.hasOneUse()) { X = N0; Y = N1; }
   else return false;
 
-  uint64_t NotKnownZeroX = (~CurDAG->computeKnownBits(X).Zero).getZExtValue();
-  uint64_t NotKnownZeroY = (~CurDAG->computeKnownBits(Y).Zero).getZExtValue();
+  SDLoc DL(Node);
+  MVT VT = Node->getSimpleValueType(0);
 
   auto *ShAmt = dyn_cast<ConstantSDNode>(Y->getOperand(1));
   if (!ShAmt)
     return false;
 
-  if(NotKnownZeroX && NotKnownZeroY != 0) return false;
+  uint64_t NotKnownZero = (~CurDAG->computeKnownBits(X).Zero).getZExtValue();
+  uint64_t Lsb = ShAmt->getZExtValue();
+  if (llvm::countl_zero(NotKnownZero) + Lsb < VT.getSizeInBits()) return false;
 
   ReplaceNode(Node, CurDAG->getMachineNode(Sodium::BFPK, DL, VT,
                                            X,

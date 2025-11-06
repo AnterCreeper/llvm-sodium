@@ -6,9 +6,8 @@ unsigned getMachineOpValue(const MCInst &MI, const MCOperand &MO,
     return Ctx.getRegisterInfo()->getEncodingValue(MO.getReg());
   if (MO.isImm())
     return static_cast<unsigned>(MO.getImm());
-  //llvm_unreachable("Unhandled expression!");
-  //return 0;
-  return getExprOpValue(MI, MO.getExpr(), Fixups, STI);
+  llvm_unreachable("Unhandled expression!");
+  return 0;
 }
 
 unsigned getImmOpValue(const MCInst &MI, unsigned OpNo,

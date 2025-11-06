@@ -27,10 +27,8 @@ public:
     VK_SODIUM_LO,
     VK_SODIUM_PCREL_LO,
     VK_SODIUM_HI,
-    VK_SODIUM_GOT_HI,
     VK_SODIUM_PCREL_HI,
     VK_SODIUM_CALL,
-    VK_SODIUM_CALL_PLT,
     VK_SODIUM_Invalid // Must be the last item
   };
 
@@ -47,7 +45,6 @@ public:
 
   VariantKind getKind() const { return Kind; }
   const MCExpr *getSubExpr() const { return Expr; }
-
 
   void printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const override;
 

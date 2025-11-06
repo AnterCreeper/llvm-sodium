@@ -87,7 +87,7 @@ void SodiumMCCodeEmitter::expandFunctionCall(const MCInst &MI,
 
   const MCExpr *CallExpr = Func.getExpr();
 
-  // Emit AUIPC Ra, Func with R_SODIUM_CALL relocation type.
+  // Emit auipc $ra, $func with R_SODIUM_CALL relocation type.
   TmpInst = MCInstBuilder(Sodium::AUIPC).addReg(Sodium::X2).addExpr(CallExpr);
   Binary = getBinaryCodeForInstr(TmpInst, Fixups, STI);
   support::endian::write(CB, Binary, support::little);
@@ -142,9 +142,11 @@ SodiumMCCodeEmitter::getExprOpValue(const MCInst &MI, const MCExpr *Expr,
   if (Kind == MCExpr::Target) {
     const SodiumMCExpr *SodiumExpr = cast<SodiumMCExpr>(Expr);
     switch (SodiumExpr->getKind()) {
+    default:
+      llvm_unreachable("Missing fixup kind!");
     case SodiumMCExpr::VK_SODIUM_None:
     case SodiumMCExpr::VK_SODIUM_Invalid:
-      llvm_unreachable("Unhandled fixup kind!");
+      llvm_unreachable("Invalid fixup kind!");
     case SodiumMCExpr::VK_SODIUM_LO:
       RelaxCandidate = true;
       FixupKind = isFMT_I ? Sodium::Fixups::fixup_sodium_lo13
@@ -159,9 +161,6 @@ SodiumMCCodeEmitter::getExprOpValue(const MCInst &MI, const MCExpr *Expr,
       RelaxCandidate = true;
       FixupKind = Sodium::Fixups::fixup_sodium_hi19;
       break;
-    case SodiumMCExpr::VK_SODIUM_GOT_HI:
-      FixupKind = Sodium::Fixups::fixup_sodium_got_hi19;
-      break;
     case SodiumMCExpr::VK_SODIUM_PCREL_HI:
       RelaxCandidate = true;
       FixupKind = Sodium::Fixups::fixup_sodium_pcrel_hi19;
@@ -170,12 +169,9 @@ SodiumMCCodeEmitter::getExprOpValue(const MCInst &MI, const MCExpr *Expr,
       RelaxCandidate = true;
       FixupKind = Sodium::Fixups::fixup_sodium_call;
       break;
-    case SodiumMCExpr::VK_SODIUM_CALL_PLT:
-      RelaxCandidate = true;
-      FixupKind = Sodium::Fixups::fixup_sodium_call_plt;
-      break;
     }
-  } else if (Kind == MCExpr::SymbolRef &&
+  } else
+  if (Kind == MCExpr::SymbolRef &&
       cast<MCSymbolRefExpr>(Expr)->getKind() == MCSymbolRefExpr::VK_None) {
     switch (MIFrm) {
     case SODIUMII::InstFMT_J:
@@ -189,7 +185,10 @@ SodiumMCCodeEmitter::getExprOpValue(const MCInst &MI, const MCExpr *Expr,
       break;
     }
   }
-  assert(FixupKind != Sodium::fixup_sodium_invalid && "Unhandled expression!");
+  if (FixupKind == Sodium::fixup_sodium_invalid) {
+    LLVM_DEBUG(errs() << "FIXME::Kind: " << Kind << "\n");
+    llvm_unreachable("Unhandled expression!");
+  }
   Fixups.push_back(MCFixup::create(0, Expr, MCFixupKind(FixupKind), MI.getLoc()));
 
   if (!RelaxCandidate) return 0;

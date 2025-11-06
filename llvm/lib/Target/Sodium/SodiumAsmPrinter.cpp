@@ -74,9 +74,6 @@ static MCOperand LowerSymbolOperand(const MachineOperand &MO, MCSymbol *Sym,
   case SODIUMII::MO_CALL:
     Kind = SodiumMCExpr::VK_SODIUM_CALL;
     break;
-  case SODIUMII::MO_PLT:
-    Kind = SodiumMCExpr::VK_SODIUM_CALL_PLT;
-    break;
   case SODIUMII::MO_LO:
     Kind = SodiumMCExpr::VK_SODIUM_LO;
     break;
@@ -85,9 +82,6 @@ static MCOperand LowerSymbolOperand(const MachineOperand &MO, MCSymbol *Sym,
     break;
   case SODIUMII::MO_HI:
     Kind = SodiumMCExpr::VK_SODIUM_HI;
-    break;
-  case SODIUMII::MO_GOT_HI:
-    Kind = SodiumMCExpr::VK_SODIUM_GOT_HI;
     break;
   case SODIUMII::MO_PCREL_HI:
     Kind = SodiumMCExpr::VK_SODIUM_PCREL_HI;

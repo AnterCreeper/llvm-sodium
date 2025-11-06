@@ -18,7 +18,6 @@ namespace llvm::Sodium {
 enum Fixups {
   //begin from FirstTargetFixupKind = 128
   fixup_sodium_hi19 = FirstTargetFixupKind,
-  fixup_sodium_got_hi19,
   fixup_sodium_pcrel_hi19,
   fixup_sodium_lo13,
   fixup_sodium_lo13s,
@@ -29,7 +28,6 @@ enum Fixups {
   fixup_sodium_jump25,
   fixup_sodium_relax,
   fixup_sodium_call,
-  fixup_sodium_call_plt,
   fixup_sodium_add_8,
   fixup_sodium_sub_8,
   fixup_sodium_add_16,

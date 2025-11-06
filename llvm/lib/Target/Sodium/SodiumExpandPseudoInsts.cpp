@@ -47,13 +47,6 @@ private:
   bool expandLoadLocalAddress(MachineBasicBlock &MBB,
                               MachineBasicBlock::iterator MBBI,
                               MachineBasicBlock::iterator &NextMBBI);
-  bool expandLoadGlobalAddress(MachineBasicBlock &MBB,
-                               MachineBasicBlock::iterator MBBI,
-                               MachineBasicBlock::iterator &NextMBBI);
-  bool expandAuipcInstPair(MachineBasicBlock &MBB,
-                           MachineBasicBlock::iterator MBBI,
-                           MachineBasicBlock::iterator &NextMBBI,
-                           unsigned FlagsHi, unsigned SecondOpcode);
 
 };
 
@@ -90,8 +83,6 @@ bool SodiumExpandPseudo::expandMI(MachineBasicBlock &MBB,
   switch (MBBI->getOpcode()) {
   case Sodium::PseudoLLA:
     return expandLoadLocalAddress(MBB, MBBI, NextMBBI);
-  case Sodium::PseudoLGA:
-    return expandLoadGlobalAddress(MBB, MBBI, NextMBBI);
   }
   return false;
 }
@@ -99,22 +90,7 @@ bool SodiumExpandPseudo::expandMI(MachineBasicBlock &MBB,
 bool SodiumExpandPseudo::expandLoadLocalAddress(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
     MachineBasicBlock::iterator &NextMBBI) {
-  return expandAuipcInstPair(MBB, MBBI, NextMBBI, SODIUMII::MO_PCREL_HI,
-                             Sodium::ADDI);
-}
 
-bool SodiumExpandPseudo::expandLoadGlobalAddress(
-    MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
-    MachineBasicBlock::iterator &NextMBBI) {
-  unsigned SecondOpcode = STI->is32Bit ? Sodium::LD : Sodium::LW;
-  return expandAuipcInstPair(MBB, MBBI, NextMBBI, SODIUMII::MO_GOT_HI,
-                             SecondOpcode);
-}
-
-bool SodiumExpandPseudo::expandAuipcInstPair(MachineBasicBlock &MBB,
-                                             MachineBasicBlock::iterator MBBI,
-                                             MachineBasicBlock::iterator &NextMBBI,
-                                             unsigned FlagsHi, unsigned SecondOpcode) {
   MachineInstr &MI = *MBBI;
   DebugLoc DL = MI.getDebugLoc();
   MachineFunction *MF = MBB.getParent();
@@ -124,7 +100,7 @@ bool SodiumExpandPseudo::expandAuipcInstPair(MachineBasicBlock &MBB,
     MF->getRegInfo().createVirtualRegister(&Sodium::IntRegsRegClass);
 
   MachineOperand &Symbol = MI.getOperand(1);
-  Symbol.setTargetFlags(FlagsHi);
+  Symbol.setTargetFlags(SODIUMII::MO_PCREL_HI);
   MCSymbol *AUIPCSymbol = MF->getContext().createNamedTempSymbol("pcrel_hi");
 
   MachineInstr *MIAUIPC =
@@ -132,7 +108,7 @@ bool SodiumExpandPseudo::expandAuipcInstPair(MachineBasicBlock &MBB,
   MIAUIPC->setPreInstrSymbol(*MF, AUIPCSymbol);
 
   MachineInstr *SecondMI =
-    BuildMI(MBB, MBBI, DL, TII->get(SecondOpcode), DestReg)
+    BuildMI(MBB, MBBI, DL, TII->get(Sodium::ADDI), DestReg)
     .addReg(ScratchReg)
     .addSym(AUIPCSymbol, SODIUMII::MO_PCREL_LO);
 

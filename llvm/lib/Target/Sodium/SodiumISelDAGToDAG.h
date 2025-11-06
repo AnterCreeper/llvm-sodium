@@ -36,6 +36,8 @@ public:
   }
 
   void Select(SDNode *Node) override;
+  bool SelectInlineAsmMemoryOperand(const SDValue &Op, unsigned ConstraintID,
+                                    std::vector<SDValue> &OutOps) override;
 
 #include "SodiumComplexPattern.h"
 
@@ -43,13 +45,15 @@ public:
 #include "SodiumGenDAGISel.inc"
 
 private:
+  bool tryShrinkShlLogicImm(SelectionDAG *CurDAG, SDNode *Node, unsigned BinOpc);
+
   bool tryBitfieldExtractOpfromAND(SelectionDAG *CurDAG, SDNode *Node);
   bool tryBitfieldExtractOpfromSExtInReg(SelectionDAG *CurDAG, SDNode *Node);
   bool tryBitfieldExtractOpfromSHR(SelectionDAG *CurDAG, SDNode *Node,
                                    bool isSigned);
-  bool tryBitfieldPack(SelectionDAG *CurDAG, SDNode *Node);
-  bool tryShrinkShlLogicImm(SelectionDAG *CurDAG, SDNode *Node, unsigned BinOpc);
+
   bool tryBitfieldPackfromOrSHL(SelectionDAG *CurDAG, SDNode *Node);
+
 };
 } // end namespace llvm
 

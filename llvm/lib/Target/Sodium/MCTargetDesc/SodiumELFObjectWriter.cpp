@@ -59,17 +59,11 @@ unsigned SodiumELFObjectWriter::getRelocType(MCContext &Ctx,
   unsigned Kind = Fixup.getTargetKind();
   if (Kind >= FirstLiteralRelocationKind)
     return Kind - FirstLiteralRelocationKind;
-
-  if (IsPCRel)
-  switch (Kind) {
-  // FIXME:
-  //case FK_Data_4:
-  //case FK_PCRel_4:
-  }
   switch (Kind) {
   default:
     Ctx.reportError(Fixup.getLoc(), "unsupported relocation type");
     return ELF::R_SODIUM_NONE;
+  case FK_Data_1:                     return ELF::R_SODIUM_8;
   case FK_Data_2:                     return ELF::R_SODIUM_16;
   case FK_Data_4:                     return ELF::R_SODIUM_32;
   case Sodium::fixup_sodium_add_8:    return ELF::R_SODIUM_ADD8;
@@ -79,17 +73,15 @@ unsigned SodiumELFObjectWriter::getRelocType(MCContext &Ctx,
   case Sodium::fixup_sodium_add_32:   return ELF::R_SODIUM_ADD32;
   case Sodium::fixup_sodium_sub_32:   return ELF::R_SODIUM_SUB32;
   case Sodium::fixup_sodium_call:     return ELF::R_SODIUM_CALL;
-  case Sodium::fixup_sodium_call_plt: return ELF::R_SODIUM_CALL_PLT;
   case Sodium::fixup_sodium_hi19:     return ELF::R_SODIUM_HI19;
-  case Sodium::fixup_sodium_got_hi19: return ELF::R_SODIUM_GOT_HI19;
   case Sodium::fixup_sodium_pcrel_hi19:   return ELF::R_SODIUM_PCREL_HI19;
   case Sodium::fixup_sodium_lo13:     return ELF::R_SODIUM_LO13;
   case Sodium::fixup_sodium_lo13s:    return ELF::R_SODIUM_LO13S;
   case Sodium::fixup_sodium_pcrel_lo13:   return ELF::R_SODIUM_PCREL_LO13;
   case Sodium::fixup_sodium_pcrel_lo13s:  return ELF::R_SODIUM_PCREL_LO13S;
-  case Sodium::fixup_sodium_jump25:   return ELF::R_SODIUM_BR25;
   case Sodium::fixup_sodium_brcc20:
   case Sodium::fixup_sodium_brind20:  return ELF::R_SODIUM_BR20;
+  case Sodium::fixup_sodium_jump25:   return ELF::R_SODIUM_BR25;
   case Sodium::fixup_sodium_relax:    return ELF::R_SODIUM_RELAX;
   }
   return ELF::R_SODIUM_NONE;

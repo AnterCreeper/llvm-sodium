@@ -80,7 +80,7 @@ public:
 private:
   unsigned getInstBundleLength(const MachineInstr &MI) const;
 
-  void parseCondBranch(MachineInstr *LastInst, MachineBasicBlock *&TBB,
+  void parseCondBranch(MachineInstr &LastInst, MachineBasicBlock *&TBB,
                        SmallVectorImpl<MachineOperand> &Cond) const;
   void instantiateCondBranch(MachineBasicBlock &MBB,
                              MachineBasicBlock *TBB,
@@ -88,24 +88,6 @@ private:
                              const DebugLoc &DL) const;
 
 };
-
-static inline bool isUncondBranchOpcode(int Opc) {
-  return Opc == Sodium::B;
-}
-static inline bool isIndirectBranchOpcode(int Opc) {
-  return Opc == Sodium::BR;
-}
-static inline bool isCondBranchOpcode(int Opc) {
-  switch (Opc) {
-  case Sodium::CBZ:
-  case Sodium::CBNZ:
-  case Sodium::CBGT:
-  case Sodium::CBGE:
-  case Sodium::CBLT:
-  case Sodium::CBLE:  return true;
-  default:            return false;
-  }
-}
 
 }
 

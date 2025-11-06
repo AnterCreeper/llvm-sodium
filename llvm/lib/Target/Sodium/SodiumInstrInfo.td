@@ -75,26 +75,18 @@ class UImmAsmOperand<int width, string suffix = "">
   : ImmAsmOperand<"U", width, suffix> {
 }
 
-class UImm4Operand : Operand<i16>,
-    ImmLeaf<i16, [{return isInt<4>(Imm);}]> {
-  let DecoderMethod = "decodeUImmOperand<4>";
-}
-
-class SImm13Operand : Operand<i16>,
-    ImmLeaf<i16, [{return isInt<13>(Imm);}]> {
-  let DecoderMethod = "decodeSImmOperand<13>";
-}
-
 //===----------------------------------------------------------------------===//
 // Immediate Operand Definition
 //===----------------------------------------------------------------------===//
-def uimm4 : UImm4Operand {
+def uimm4 : Operand<i16>,
+    ImmLeaf<i16, [{return isInt<4>(Imm);}]> {
   let ParserMatchClass = UImmAsmOperand<4>;
   let EncoderMethod = "getImmOpValue";
-  let DecoderMethod = "decodeSImmOperand<4>";
+  let DecoderMethod = "decodeUImmOperand<4>";
 }
 
-def simm13 : SImm13Operand {
+def simm13 : Operand<i16>,
+    ImmLeaf<i16, [{return isInt<13>(Imm);}]> {
   let ParserMatchClass = SImmAsmOperand<13>;
   let EncoderMethod = "getImmOpValue";
   let DecoderMethod = "decodeSImmOperand<13>";
@@ -110,16 +102,19 @@ def uimm3_plus1 : Operand<i16>,
 //Load Relative Upper Immediate
 def uimm20_lui16 : Operand<i16>,
     ImmLeaf<i16, [{return isInt<20>(Imm);}]> {
+  let EncoderMethod = "getImmOpValue";
   let DecoderMethod = "decodeUImmOperand<20>";
 }
 
 def uimm20_lui32 : Operand<i32>,
     ImmLeaf<i32, [{return isInt<20>(Imm);}]> {
+  let EncoderMethod = "getImmOpValue";
   let DecoderMethod = "decodeUImmOperand<20>";
 }
 
 def uimm20_auipc : Operand<XLenVT>,
     ImmLeaf<XLenVT, [{return isInt<20>(Imm);}]> {
+  let EncoderMethod = "getImmOpValue";
   let DecoderMethod = "decodeUImmOperand<20>";
 }
 
@@ -507,8 +502,6 @@ def PseudoTail : Pseudo<(outs), (ins call_symbol:$dst),
 
 // Expanded at XXXExpandPseudoInsts.cpp
 let Size = 8 in {
-def PseudoLGA : Pseudo<(outs IntRegs:$dst), (ins bare_symbol:$src),
-                "lga", "$dst, $src", []>;
 def PseudoLLA : Pseudo<(outs IntRegs:$dst), (ins bare_symbol:$src),
                 "lla", "$dst, $src", []>;                     //l?a sym   => ADDI (AUIPC %hi(sym)), %lo(sym)
 }
@@ -545,7 +538,6 @@ def : Pat<(sodium_add_lo IntRegs:$hi, tjumptable:$lo),
 def : Pat<(sodium_add_lo IntRegs:$hi, tconstpool:$lo),
           (ADDI IntRegs:$hi, tconstpool:$lo)>;
 
-def : Pat<(iPTR (sodium_lga tglobaladdr:$in)), (PseudoLGA tglobaladdr:$in)>;
 def : Pat<(sodium_lla tjumptable:$in), (PseudoLLA tjumptable:$in)>;
 def : Pat<(sodium_lla tconstpool:$in), (PseudoLLA tconstpool:$in)>;
 def : Pat<(sodium_lla tglobaladdr:$in), (PseudoLLA tglobaladdr:$in)>;

@@ -40,49 +40,103 @@ Sodium::Sodium() {
   gotBaseSymInGotPlt = false;
 }
 
-RelExpr Sodium::getRelExpr(RelType type, const Symbol &s,
+RelExpr Sodium::getRelExpr(const RelType type, const Symbol &s,
                            const uint8_t *loc) const {
   switch (type) {
-  case R_MSP430_10_PCREL:
-  case R_MSP430_16_PCREL:
-  case R_MSP430_16_PCREL_BYTE:
-  case R_MSP430_2X_PCREL:
-  case R_MSP430_RL_PCREL:
-  case R_MSP430_SYM_DIFF:
-    return R_PC;
-  default:
+  case R_SODIUM_NONE:
+    return R_NONE;
+  case R_SODIUM_RELAX:
+    return R_NONE; //return config->relax ? R_RELAX_HINT : R_NONE;
+  case R_SODIUM_16:
+  case R_SODIUM_32:
+  case R_SODIUM_HI19:
+  case R_SODIUM_LO13:
+  case R_SODIUM_LO13S:
     return R_ABS;
+  case R_SODIUM_BR20:
+  case R_SODIUM_BR25:
+  case R_SODIUM_CALL:
+  case R_SODIUM_PCREL_HI19:
+    return R_PC;
+  // The Sodium relocs below behave like the RISCV counterparts; reuse
+  // the RelExpr to avoid code duplication.
+  case R_SODIUM_PCREL_LO13:
+  case R_SODIUM_PCREL_LO13S:
+    return R_RISCV_PC_INDIRECT;
+  case R_SODIUM_ADD8:
+  case R_SODIUM_ADD16:
+  case R_SODIUM_ADD32:
+  case R_SODIUM_SUB8:
+  case R_SODIUM_SUB16:
+  case R_SODIUM_SUB32:
+    return R_RISCV_ADD;
+  default:
+    error(getErrorLocation(loc) + "unknown relocation (" + Twine(type) +
+          ") against symbol " + toString(s));
+    return R_NONE;
   }
 }
 
+#define GENMASK(n, m)    (((1 << (m - n + 1)) - 1) << n)
+#define GETBITS(x, n, m) ((x >> n) & ((1 << (m - n + 1)) - 1))
+
+#include "SodiumRelocate.h"
+
 void Sodium::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   switch (rel.type) {
-  case R_MSP430_8:
-    checkIntUInt(loc, val, 8, rel);
-    *loc = val;
-    break;
-  case R_MSP430_16:
-  case R_MSP430_16_PCREL:
-  case R_MSP430_16_BYTE:
-  case R_MSP430_16_PCREL_BYTE:
-    checkIntUInt(loc, val, 16, rel);
-    write16le(loc, val);
-    break;
-  case R_MSP430_32:
-    checkIntUInt(loc, val, 32, rel);
-    write32le(loc, val);
-    break;
-  case R_MSP430_10_PCREL: {
-    int16_t offset = ((int16_t)val >> 1) - 1;
-    checkInt(loc, offset, 10, rel);
-    write16le(loc, (read16le(loc) & 0xFC00) | (offset & 0x3FF));
-    break;
-  }
   default:
-    error(getErrorLocation(loc) + "unrecognized relocation " +
-          toString(rel.type));
+    write32le(loc, getReloc(loc, rel, val));
+    return;
+  case R_SODIUM_ADD8:
+    *loc += val;
+    return;
+  case R_SODIUM_SUB8:
+    *loc -= val;
+    return;
+  case R_SODIUM_16:
+    write16le(loc, val);
+    return;
+  case R_SODIUM_ADD16:
+    write16le(loc, read16le(loc) + val);
+    return;
+  case R_SODIUM_SUB16:
+    write16le(loc, read16le(loc) - val);
+    return;
+  case R_SODIUM_32:
+    write32le(loc, val);
+    return;
+  case R_SODIUM_ADD32:
+    write32le(loc, read32le(loc) + val);
+    return;
+  case R_SODIUM_SUB32:
+    write32le(loc, read32le(loc) - val);
+    return;
+  case R_SODIUM_RELAX:
+    return; // Ignored (for now)
+  case R_SODIUM_CALL: {
+    int64_t hi = (val + 0x1000) >> 13;
+    checkInt(loc, hi, 19, rel);
+    if (isInt<19>(hi)) {
+      relocateNoSym(loc, R_SODIUM_PCREL_HI19, val);
+      relocateNoSym(loc + 4, R_SODIUM_PCREL_LO13, val);
+    }
+    return;
+  }
   }
 }
+
+/*
+static void relaxCall(const InputSection &sec, size_t i, uint64_t loc,
+                      Relocation &r, uint32_t &remove) {
+  const Symbol &sym = *r.sym;
+  const uint64_t dest = sym.getVA() + r.addend;
+  if (isInt<26>(dest - loc)) {
+    sec.relaxAux->relocTypes[i] = R_SODIUM_BR25;
+    sec.relaxAux->writes.push_back(0x201); //BL
+    remove = 4;
+  }
+}
+*/
 
 TargetInfo *elf::getSodiumTargetInfo() {
   static Sodium target;

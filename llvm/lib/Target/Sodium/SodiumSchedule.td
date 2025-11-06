@@ -25,10 +25,10 @@ def WriteLoad       : SchedWrite;
 def WriteStore      : SchedWrite;
 
 def SodiumGenericModel : SchedMachineModel {
-    let MicroOpBufferSize = 0; // in-order.
-    let IssueWidth = 1;        // 1 micro-op is dispatched per cycle.
+    let MicroOpBufferSize = 0;
+    let IssueWidth = 1;
     let LoadLatency = 1;
-    let MispredictPenalty = 3;
+    let MispredictPenalty = 1;
     let CompleteModel = false;
 }
 

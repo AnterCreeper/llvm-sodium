@@ -32,7 +32,6 @@ const MCFixupKindInfo &SodiumAsmBackend::getFixupKindInfo(MCFixupKind Kind) cons
       //
       // name offset bits flags
       {"fixup_sodium_hi19", 0, 32, 0},
-      {"fixup_sodium_got_hi19", 0, 32, MCFixupKindInfo::FKF_IsPCRel},
       {"fixup_sodium_pcrel_hi19", 0, 32,
        MCFixupKindInfo::FKF_IsPCRel | MCFixupKindInfo::FKF_IsTarget},
       {"fixup_sodium_lo13", 0, 32, 0},
@@ -46,7 +45,6 @@ const MCFixupKindInfo &SodiumAsmBackend::getFixupKindInfo(MCFixupKind Kind) cons
       {"fixup_sodium_jump25", 0, 32, MCFixupKindInfo::FKF_IsPCRel},
       {"fixup_sodium_relax", 0, 0, 0},
       {"fixup_sodium_call", 0, 64, MCFixupKindInfo::FKF_IsPCRel},
-      {"fixup_sodium_call_plt", 0, 64, MCFixupKindInfo::FKF_IsPCRel},
       {"fixup_sodium_add_8", 0, 8, 0},
       {"fixup_sodium_sub_8", 0, 8, 0},
       {"fixup_sodium_add_16", 0, 16, 0},
@@ -105,7 +103,7 @@ bool SodiumAsmBackend::handleAddSubRelocations(const MCAsmLayout &Layout,
   return true;
 }
 
-#define ALIGN(x, y) if((x)&((1<<(y))-1)) Ctx.reportError(Fixup.getLoc(), "fixup value must be 2-byte aligned")
+#define ALIGN(x, y) if((x) & ((1 << (y)) - 1)) Ctx.reportError(Fixup.getLoc(), "fixup value must be aligned")
 
 //bit field extract, return X[m:n]
 #define GETBITS(x, n, m) ((x >> n) & ((1 << (m - n + 1)) - 1))
@@ -115,8 +113,6 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
   switch (Fixup.getTargetKind()) {
   default:
     llvm_unreachable("Unknown fixup kind!");
-  case Sodium::fixup_sodium_got_hi19:
-    llvm_unreachable("Relocation should be unconditionally forced\n");
   case Sodium::fixup_sodium_add_8:
   case Sodium::fixup_sodium_sub_8:
   case Sodium::fixup_sodium_add_16:
@@ -156,8 +152,7 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
            (GETBITS(Value, 6,  15) << 22) |
            (GETBITS(Value, 16, 20) << 12);
   }
-  case Sodium::fixup_sodium_call:
-  case Sodium::fixup_sodium_call_plt: {
+  case Sodium::fixup_sodium_call: {
     ALIGN(Value, 1);
     uint64_t LowerImm = (Value & 0x1fffULL);        //13 bits
     uint64_t UpperImm = (Value + 0x1000ULL) >> 13;  //19 bits

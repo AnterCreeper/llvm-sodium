@@ -147,7 +147,6 @@ const char *SodiumTargetLowering::getTargetNodeName(unsigned Opcode) const {
     NODE_NAME_CASE(Ret)
     NODE_NAME_CASE(ERet)
     NODE_NAME_CASE(LLA)
-    NODE_NAME_CASE(LGA)
     NODE_NAME_CASE(BFPK)
     NODE_NAME_CASE(BFMG)
     NODE_NAME_CASE(SBFX)
@@ -308,25 +307,9 @@ SDValue SodiumTargetLowering::getAddr(NodeTy *N, SelectionDAG &DAG,
   SDValue Addr = getTargetNode(N, DL, Ty, DAG, 0);
 
   if (isPositionIndependent()) {
-    if (IsLocal)
     // This generates the pattern (PseudoLLA sym), which expands to
     //   addi (auipc %pcrel_hi(sym)), %pcrel_lo(sym).
     return DAG.getNode(SodiumISD::LLA, DL, Ty, Addr);
-
-    // Use PC-relative addressing to access the GOT for this symbol, then load
-    // the address from the GOT. This generates the pattern (PseudoLGA sym),
-    // which expands to
-    //   lw %pcrel_lo(auipc)(auipc %got_pcrel_hi(sym)).
-    MachineFunction &MF = DAG.getMachineFunction();
-    MachineMemOperand *MemOp = MF.getMachineMemOperand(
-      MachinePointerInfo::getGOT(MF),
-      MachineMemOperand::MOLoad | MachineMemOperand::MODereferenceable |
-      MachineMemOperand::MOInvariant,
-      LLT(Ty.getSimpleVT()), Align(Ty.getFixedSizeInBits() / 8));
-    SDValue Load = DAG.getMemIntrinsicNode(SodiumISD::LGA, DL,
-                                           DAG.getVTList(Ty, MVT::Other),
-                                           {DAG.getEntryNode(), Addr}, Ty, MemOp);
-    return Load;
   }
 
   //NonPIC Address
@@ -581,4 +564,172 @@ SDValue SodiumTargetLowering::PerformDAGCombine(SDNode *N,
   }
   }
   return SDValue();
+}
+
+/// getConstraintType - Given a constraint letter, return the type of
+/// constraint it is for this target.
+SodiumTargetLowering::ConstraintType
+SodiumTargetLowering::getConstraintType(StringRef Constraint) const {
+  if (Constraint.size() == 1) {
+    switch (Constraint[0]) {
+    default:
+      break;
+    case 'd':
+      return C_RegisterClass;
+    case 'I':
+    case 'J':
+    case 'K':
+      return C_Immediate;
+    case 'A':
+      return C_Memory;
+    case 'S':
+      return C_Other; // A symbolic address
+    }
+  }
+  return TargetLowering::getConstraintType(Constraint);
+}
+
+std::pair<unsigned, const TargetRegisterClass *>
+SodiumTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
+                                                   StringRef Constraint,
+                                                   MVT VT) const {
+  // First, see if this is a constraint that directly corresponds to a Sodium
+  // register class.
+  if (Constraint.size() == 1) {
+    switch (Constraint[0]) {
+    case 'r':
+      return std::make_pair(0U, &Sodium::IntNoX0RegClass);
+    default:
+      break;
+    }
+  }
+
+/*
+  // Clang will correctly decode the usage of register name aliases into their
+  // official names. However, other frontends like `rustc` do not. This allows
+  // users of these frontends to use the ABI names for registers in LLVM-style
+  // register constraints.
+  unsigned XRegFromAlias = StringSwitch<unsigned>(Constraint.lower())
+                               .Case("{zero}", Sodium::X0)
+                               .Case("{ra}", Sodium::X1)
+                               .Case("{sp}", Sodium::X2)
+                               .Case("{gp}", Sodium::X3)
+                               .Case("{tp}", Sodium::X4)
+                               .Case("{t0}", Sodium::X5)
+                               .Case("{t1}", Sodium::X6)
+                               .Case("{t2}", Sodium::X7)
+                               .Cases("{s0}", "{fp}", Sodium::X8)
+                               .Case("{s1}", Sodium::X9)
+                               .Case("{a0}", Sodium::X10)
+                               .Case("{a1}", Sodium::X11)
+                               .Case("{a2}", Sodium::X12)
+                               .Case("{a3}", Sodium::X13)
+                               .Case("{a4}", Sodium::X14)
+                               .Case("{a5}", Sodium::X15)
+                               .Case("{a6}", Sodium::X16)
+                               .Case("{a7}", Sodium::X17)
+                               .Case("{s2}", Sodium::X18)
+                               .Case("{s3}", Sodium::X19)
+                               .Case("{s4}", Sodium::X20)
+                               .Case("{s5}", Sodium::X21)
+                               .Case("{s6}", Sodium::X22)
+                               .Case("{s7}", Sodium::X23)
+                               .Case("{s8}", Sodium::X24)
+                               .Case("{s9}", Sodium::X25)
+                               .Case("{s10}", Sodium::X26)
+                               .Case("{s11}", Sodium::X27)
+                               .Case("{t3}", Sodium::X28)
+                               .Case("{t4}", Sodium::X29)
+                               .Case("{t5}", Sodium::X30)
+                               .Case("{t6}", Sodium::X31)
+                               .Default(Sodium::NoRegister);
+  if (XRegFromAlias != Sodium::NoRegister)
+    return std::make_pair(XRegFromAlias, &Sodium::IntRegsRegClass);
+*/
+
+  std::pair<Register, const TargetRegisterClass *> Res =
+      TargetLowering::getRegForInlineAsmConstraint(TRI, Constraint, VT);
+
+  return Res;
+}
+
+/// LowerAsmOperandForConstraint - Lower the specified operand into the Ops
+/// vector.  If it is invalid, don't add anything to Ops.
+void SodiumTargetLowering::LowerAsmOperandForConstraint(SDValue Op,
+                                                        std::string &Constraint,
+                                                        std::vector<SDValue>&Ops,
+                                                        SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  EVT Type = Op.getValueType();
+
+  // Currently only support length 1 constraints.
+  if (Constraint.length() == 1) {
+    switch (Constraint[0]) {
+    case 'I':
+      // Validate & create a 12-bit signed immediate operand.
+      if (auto *C = dyn_cast<ConstantSDNode>(Op)) {
+        uint64_t CVal = C->getSExtValue();
+        if (isInt<13>(CVal))
+          Ops.push_back(
+              DAG.getTargetConstant(CVal, DL, Type));
+      }
+      return;
+    case 'J':
+      // Validate & create an integer zero operand.
+      if (isNullConstant(Op))
+        Ops.push_back(
+            DAG.getTargetConstant(0, DL, Type));
+      return;
+    case 'K':
+      // Validate & create a 4-bit unsigned immediate operand.
+      if (auto *C = dyn_cast<ConstantSDNode>(Op)) {
+        uint64_t CVal = C->getZExtValue();
+        if (isUInt<4>(CVal))
+          Ops.push_back(
+              DAG.getTargetConstant(CVal, DL, Type));
+      }
+      return;
+    case 'S':
+      if (const auto *GA = dyn_cast<GlobalAddressSDNode>(Op)) {
+        Ops.push_back(DAG.getTargetGlobalAddress(GA->getGlobal(), SDLoc(Op),
+                                                 GA->getValueType(0)));
+      } else if (const auto *BA = dyn_cast<BlockAddressSDNode>(Op)) {
+        Ops.push_back(DAG.getTargetBlockAddress(BA->getBlockAddress(),
+                                                BA->getValueType(0)));
+      }
+      return;
+    default:
+      break;
+    }
+  }
+  TargetLowering::LowerAsmOperandForConstraint(Op, Constraint, Ops, DAG);
+}
+
+bool SodiumTargetLowering::isLegalAddressingMode(const DataLayout &DL,
+                                                 const AddrMode &AM, Type *Ty,
+                                                 unsigned AS,
+                                                 Instruction *I) const {
+  // No global is ever allowed as a base.
+  if (AM.BaseGV)
+    return false;
+
+  // Require a 13-bit signed offset.
+  if (!isInt<13>(AM.BaseOffs))
+    return false;
+
+  switch (AM.Scale) {
+  case 0:
+  // "r+i" or just "i", depending on HasBaseReg.
+    break;
+  case 1:
+  // allow "r+i".
+    if (!AM.HasBaseReg)
+      break;
+  // disallow "r+r" or "r+r+i".
+    return false;
+  default:
+    return false;
+  }
+
+  return true;
 }

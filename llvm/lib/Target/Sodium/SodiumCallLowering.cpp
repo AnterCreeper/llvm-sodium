@@ -199,19 +199,14 @@ SodiumTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   // direct call is) turn it into a TargetGlobalAddress/TargetExternalSymbol
   // node so that legalize doesn't hack it.
   EVT PtrVT = getPointerTy(DAG.getDataLayout());
-  if (GlobalAddressSDNode *S = dyn_cast<GlobalAddressSDNode>(Callee)) {
-    unsigned OpFlags = SODIUMII::MO_CALL;
-    const GlobalValue *GV = S->getGlobal();
-    if (!getTargetMachine().shouldAssumeDSOLocal(*GV->getParent(), GV))
-      OpFlags = SODIUMII::MO_PLT;
-    Callee = DAG.getTargetGlobalAddress(GV, DL, PtrVT, 0, OpFlags);
-  } else
-  if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
-    unsigned OpFlags = SODIUMII::MO_CALL;
-    if (!getTargetMachine().shouldAssumeDSOLocal(*MF.getFunction().getParent(), nullptr))
-      OpFlags = SODIUMII::MO_PLT;
-    Callee = DAG.getTargetExternalSymbol(S->getSymbol(), PtrVT, OpFlags);
-  }
+
+  // If the callee is a GlobalAddress node (quite common, every direct call is)
+  // turn it into a TargetGlobalAddress node so that legalize doesn't hack it.
+  // Likewise ExternalSymbol -> TargetExternalSymbol.
+  if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee))
+    Callee = DAG.getTargetGlobalAddress(G->getGlobal(), DL, PtrVT, SODIUMII::MO_CALL);
+  else if (ExternalSymbolSDNode *E = dyn_cast<ExternalSymbolSDNode>(Callee))
+    Callee = DAG.getTargetExternalSymbol(E->getSymbol(), PtrVT, SODIUMII::MO_CALL);
 
   // The first call operand is the chain and the second is the target address.
   SmallVector<SDValue, 8> Ops;
