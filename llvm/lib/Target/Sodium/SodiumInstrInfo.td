@@ -38,8 +38,6 @@ def sodium_call : SDNode<"SodiumISD::Call", SDTCall,
 def sodium_tail : SDNode<"SodiumISD::Tail", SDTCall,
   [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
 def sodium_lla : SDNode<"SodiumISD::LLA", SDTIntUnaryOp>;
-def sodium_lga : SDNode<"SodiumISD::LGA", SDTLoad,
-  [SDNPHasChain, SDNPMayLoad, SDNPMemOperand]>;
 
 def sodium_bfpk : SDNode<"SodiumISD::BFPK", SDTBFPK>;
 def sodium_bfmg : SDNode<"SodiumISD::BFMG", SDTIntBinOp>;
@@ -100,29 +98,33 @@ def uimm3_plus1 : Operand<i16>,
 }
 
 //Load Relative Upper Immediate
-def uimm20_lui16 : Operand<i16>,
-    ImmLeaf<i16, [{return isInt<20>(Imm);}]> {
+class UImm20Operand<ValueType VT> : Operand<VT>,
+    ImmLeaf<VT, [{return isInt<20>(Imm);}]> {
   let EncoderMethod = "getImmOpValue";
   let DecoderMethod = "decodeUImmOperand<20>";
+  let MCOperandPredicate = [{
+    int64_t Imm;
+    if (MCOp.evaluateAsConstantImm(Imm))
+      return isUInt<20>(Imm);
+    return MCOp.isBareSymbolRef();
+  }];
 }
 
-def uimm20_lui32 : Operand<i32>,
-    ImmLeaf<i32, [{return isInt<20>(Imm);}]> {
-  let EncoderMethod = "getImmOpValue";
-  let DecoderMethod = "decodeUImmOperand<20>";
+def uimm20_lui16 : UImm20Operand<i16> {
+  let ParserMatchClass = UImmAsmOperand<20, "LUI16">;
+}
+def uimm20_lui32 : UImm20Operand<i32> {
+  let ParserMatchClass = UImmAsmOperand<20, "LUI32">;
+}
+def uimm20_auipc : UImm20Operand<XLenVT> {
+  let ParserMatchClass = UImmAsmOperand<20, "AUIPC">;
 }
 
-def uimm20_auipc : Operand<XLenVT>,
-    ImmLeaf<XLenVT, [{return isInt<20>(Imm);}]> {
-  let EncoderMethod = "getImmOpValue";
-  let DecoderMethod = "decodeUImmOperand<20>";
-}
-
+// A 26-bit signed immediate where the least significant bit is zero.
 def SImm26Lsb0BranchAsmOperand : SImmAsmOperand<26, "branch"> {
   let ParserMethod = "parseBranchOffset";
 }
 
-// A 26-bit signed immediate where the least significant bit is zero.
 def simm25_jump : Operand<OtherVT> {
   let ParserMatchClass = SImm26Lsb0BranchAsmOperand;
   let PrintMethod = "printBranchOperand";
@@ -484,12 +486,12 @@ def CBLE : CondB_ri<0b111, "cble">;
 let isBarrier = 1, isBranch = 1, isIndirectBranch = 1, isTerminator = 1, Size = 8 in
 def PseudoJump : Pseudo<(outs), (ins jump_symbol:$dst),       //which is rare in use
                 "jmp", "$dst", []>,
-                Sched<[WriteBranch, ReadBranch]>;             //brind sym => BR (AUIPC %hi(sym)), %lo(sym),   relax to BR X0, offset(sym)
+                Sched<[WriteBranch, ReadBranch]>;             //brind sym  => BR (AUIPC %hi(sym)), %lo(sym),   relax to BR X0, offset(sym)
                                                               // formed by insertIndirectBranch, expanded by expandFunctionCall
 let isCall = 1, Size = 8 in
 def PseudoCall : Pseudo<(outs), (ins call_symbol:$dst),
                 "call", "$dst", []>,
-                Sched<[WriteIALU, WriteBranch]>;              //call sym  => BLR (AUIPC %hi(sym)), %lo(sym),  relax to BL offset(sym)
+                Sched<[WriteIALU, WriteBranch]>;              //call sym   => BLR (AUIPC %hi(sym)), %lo(sym),  relax to BL offset(sym)
 let isCall = 1 in
 def PseudoCallIndirect : Pseudo<(outs), (ins IntRegs:$rb), "", "",
                 [(sodium_call IntRegs:$rb)]>,
@@ -498,12 +500,17 @@ def PseudoCallIndirect : Pseudo<(outs), (ins IntRegs:$rb), "", "",
 let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Size = 8 in
 def PseudoTail : Pseudo<(outs), (ins call_symbol:$dst),
                 "tail", "$dst", []>,
-                 Sched<[WriteIALU, WriteBranch, ReadBranch]>; //tail sym  => BLR (AUIPC %hi(sym)), %lo(sym),  relax to BL offset(sym)
+                 Sched<[WriteIALU, WriteBranch, ReadBranch]>; //tail sym   => BLR (AUIPC %hi(sym)), %lo(sym),  relax to BL offset(sym)
+
+let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1 in
+def PseudoTailIndirect : Pseudo<(outs), (ins IntRegs:$rb), "", "",
+                [(sodium_tail IntRegs:$rb)]>,
+                PseudoInstExpansion<(BLR IntRegs:$rb, 0)>;    //tail (sym) => BLR $rb(sym), 0
 
 // Expanded at XXXExpandPseudoInsts.cpp
 let Size = 8 in {
 def PseudoLLA : Pseudo<(outs IntRegs:$dst), (ins bare_symbol:$src),
-                "lla", "$dst, $src", []>;                     //l?a sym   => ADDI (AUIPC %hi(sym)), %lo(sym)
+                "lla", "$dst, $src", []>;                     //lla sym    => ADDI (AUIPC %hi(sym)), %lo(sym)
 }
 
 //===----------------------------------------------------------------------===//

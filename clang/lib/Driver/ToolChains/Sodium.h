@@ -22,9 +22,13 @@ public:
   SodiumToolChain(const Driver &D, const llvm::Triple &Triple,
                   const llvm::opt::ArgList &Args);
 
+  bool isPIEDefault(const llvm::opt::ArgList &Args) const override {
+    return true;
+  }
   bool HasNativeLLVMSupport() const override { return true; }
+
 protected:
-//  Tool *buildLinker() const override;
+  Tool *buildLinker() const override;
 
 private:
 
@@ -32,13 +36,12 @@ private:
 
 } // end namespace toolchains
 
-/*
 namespace tools {
 namespace Sodium {
 class LLVM_LIBRARY_VISIBILITY Linker : public Tool {
 public:
   Linker(const llvm::Triple &Triple, const ToolChain &TC)
-      : Tool("Sodium::Linker", "sodium-ld", TC), Triple(Triple) {}
+      : Tool("Sodium::Linker", "sodium-elf-ld", TC), Triple(Triple) {}
 
   bool isLinkJob() const override { return true; }
   bool hasIntegratedCPP() const override { return false; }
@@ -54,7 +57,6 @@ protected:
 
 } // end namespace Sodium
 } // end namespace tools
-*/
 } // end namespace driver
 } // end namespace clang
 

@@ -199,12 +199,8 @@ SodiumTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   // direct call is) turn it into a TargetGlobalAddress/TargetExternalSymbol
   // node so that legalize doesn't hack it.
   EVT PtrVT = getPointerTy(DAG.getDataLayout());
-
-  // If the callee is a GlobalAddress node (quite common, every direct call is)
-  // turn it into a TargetGlobalAddress node so that legalize doesn't hack it.
-  // Likewise ExternalSymbol -> TargetExternalSymbol.
   if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee))
-    Callee = DAG.getTargetGlobalAddress(G->getGlobal(), DL, PtrVT, SODIUMII::MO_CALL);
+    Callee = DAG.getTargetGlobalAddress(G->getGlobal(), DL, PtrVT, 0, SODIUMII::MO_CALL);
   else if (ExternalSymbolSDNode *E = dyn_cast<ExternalSymbolSDNode>(Callee))
     Callee = DAG.getTargetExternalSymbol(E->getSymbol(), PtrVT, SODIUMII::MO_CALL);
 
