@@ -1,4 +1,12 @@
-//generate ?bfx x, lsb, len
+static SDValue BitfieldInsert(SelectionDAG *CurDAG, SDValue X, unsigned Lsb, unsigned Len,
+                              SDLoc DL, MVT VT, bool isSigned) {
+  unsigned Opc = isSigned ? Sodium::SBFI : Sodium::UBFI;
+  return SDValue(CurDAG->getMachineNode(Opc, DL, VT,
+                                        X,
+                                        CurDAG->getTargetConstant(Lsb, DL, VT),
+                                        CurDAG->getTargetConstant(Len, DL, VT)), 0);
+}
+
 static SDValue BitfieldExtract(SelectionDAG *CurDAG, SDValue X, unsigned Lsb, unsigned Len,
                                SDLoc DL, MVT VT, bool isSigned) {
   unsigned Opc = isSigned ? Sodium::SBFX : Sodium::UBFX;
@@ -11,7 +19,7 @@ static SDValue BitfieldExtract(SelectionDAG *CurDAG, SDValue X, unsigned Lsb, un
 #define IS_SHIFTED_MASK(x, y) (((x) & ((x) + (1 << y))) == 0)
 #define IS_MASK(x) IS_SHIFTED_MASK(x, 0)
 
-bool SodiumDAGToDAGISel::tryBitfieldExtractOpfromSHR(SelectionDAG *CurDAG, SDNode *Node, bool isSigned) {
+bool SodiumDAGToDAGISel::tryBitfieldOpfromSHR(SelectionDAG *CurDAG, SDNode *Node, bool isSigned) {
   SDValue N0 = Node->getOperand(0);
   if (!N0.hasOneUse())
     return false;
@@ -23,7 +31,7 @@ bool SodiumDAGToDAGISel::tryBitfieldExtractOpfromSHR(SelectionDAG *CurDAG, SDNod
   MVT VT = Node->getSimpleValueType(0);
 
   // fold sr? (sll x, C1), C2 =>
-  //      ?bfx x, lsb, len
+  //      ?bf? x, lsb, len
   if (N0.getOpcode() == ISD::SHL) {
     SDValue X = N0.getOperand(0);
     auto *C1 = dyn_cast<ConstantSDNode>(N0->getOperand(1));
@@ -32,12 +40,18 @@ bool SodiumDAGToDAGISel::tryBitfieldExtractOpfromSHR(SelectionDAG *CurDAG, SDNod
 
     const unsigned LeftShAmt = C1->getZExtValue();
     const unsigned RightShAmt = C2->getZExtValue();
-    // Make sure that this is a bitfield extraction.
-    if (LeftShAmt > RightShAmt) return false;
 
-    const unsigned Lsb = RightShAmt - LeftShAmt;
-    const unsigned Len = VT.getSizeInBits() - RightShAmt - 1;
-    ReplaceNode(Node, BitfieldExtract(CurDAG, X, Lsb, Len, DL, VT, isSigned).getNode());
+    if (LeftShAmt > RightShAmt) {
+      // Bit Field Insert,  $rd[len:0] = $rs[lsb+len:lsb]
+      const unsigned Lsb = LeftShAmt - RightShAmt;
+      const unsigned Len = VT.getSizeInBits() - LeftShAmt - 1;
+      ReplaceNode(Node, BitfieldInsert(CurDAG, X, Lsb, Len, DL, VT, isSigned).getNode());
+    } else {
+      // Bit Field Extract, $rd[lsb+len:lsb] = $rs[len:0]
+      const unsigned Lsb = RightShAmt - LeftShAmt;
+      const unsigned Len = VT.getSizeInBits() - RightShAmt - 1;
+      ReplaceNode(Node, BitfieldExtract(CurDAG, X, Lsb, Len, DL, VT, isSigned).getNode());
+    }
     return true;
   }
 
@@ -82,7 +96,7 @@ bool SodiumDAGToDAGISel::tryBitfieldExtractOpfromSHR(SelectionDAG *CurDAG, SDNod
   return false;
 }
 
-bool SodiumDAGToDAGISel::tryBitfieldExtractOpfromAND(SelectionDAG *CurDAG, SDNode *Node) {
+bool SodiumDAGToDAGISel::tryBitfieldOpfromAND(SelectionDAG *CurDAG, SDNode *Node) {
   SDValue N0 = Node->getOperand(0);
   if (!N0.hasOneUse())
     return false;
@@ -120,10 +134,31 @@ bool SodiumDAGToDAGISel::tryBitfieldExtractOpfromAND(SelectionDAG *CurDAG, SDNod
     return true;
   }
 
+  //fold and (shl x, C1), C2
+  //  => ubfi x, lsb, len
+  if (N0.getOpcode() == ISD::SHL) {
+    SDValue X = N0.getOperand(0);
+    auto *C1 = dyn_cast<ConstantSDNode>(N0->getOperand(1));
+    if (!C1)
+      return false;
+
+    unsigned Mask = C2->getZExtValue();
+    const unsigned LeftShAmt = C1->getZExtValue();
+    // Make sure that this is a bitfield insert.
+    const unsigned Lsb = LeftShAmt;
+    Mask >>= Lsb;
+    if (Mask == 0) return false;
+    if (!IS_MASK(Mask)) return false;
+
+    const unsigned Len = llvm::countr_one(Mask) - 1;
+    ReplaceNode(Node, BitfieldInsert(CurDAG, X, Lsb, Len, DL, VT, false).getNode());
+    return true;
+  }
+
   return false;
 }
 
-bool SodiumDAGToDAGISel::tryBitfieldExtractOpfromSExtInReg(SelectionDAG *CurDAG, SDNode *Node) {
+bool SodiumDAGToDAGISel::tryBitfieldOpfromSExtInReg(SelectionDAG *CurDAG, SDNode *Node) {
   SDValue N0 = Node->getOperand(0);
   if (!N0.hasOneUse())
     return false;
@@ -151,7 +186,90 @@ bool SodiumDAGToDAGISel::tryBitfieldExtractOpfromSExtInReg(SelectionDAG *CurDAG,
     return true;
   }
 
+  //fold sext_inreg (sll x, C1) _
+  //  => sbfi x, lsb, len
+  if (N0.getOpcode() == ISD::SHL) {
+    SDValue X = N0.getOperand(0);
+    auto *C1 = dyn_cast<ConstantSDNode>(N0->getOperand(1));
+    if (!C1)
+      return false;
+
+    const unsigned LeftShAmt = C1->getZExtValue();
+
+    const unsigned Lsb = LeftShAmt;
+    const unsigned Len = ExtSize - LeftShAmt - 1;
+    //if (Len < 0) llvm_unreachable("unreachable, as the result should be constant zero.");
+
+    ReplaceNode(Node, BitfieldInsert(CurDAG, X, Lsb, Len, DL, VT, true).getNode());
+    return true;
+  }
+
   return false;
+}
+
+bool SodiumDAGToDAGISel::tryBitfieldInsertOpfromSHL(SelectionDAG *CurDAG, SDNode *Node) {
+  SDValue N0 = Node->getOperand(0);
+  if (!N0.hasOneUse())
+    return false;
+  auto *C2 = dyn_cast<ConstantSDNode>(Node->getOperand(1));
+  if (!C2)
+    return false;
+
+  SDLoc DL(Node);
+  MVT VT = Node->getSimpleValueType(0);
+
+  // fold sll (and x, C1), C2 =>
+  //      ubfi x, lsb, len
+  if (N0.getOpcode() == ISD::AND) {
+    SDValue X = N0.getOperand(0);
+    auto *C1 = dyn_cast<ConstantSDNode>(N0->getOperand(1));
+    if (!C1)
+      return false;
+
+    const unsigned Mask = C1->getZExtValue();
+    const unsigned LeftShAmt = C2->getZExtValue();
+
+    // Make sure that this is a bitfield insert.
+    if (!IS_MASK(Mask)) return false;
+
+    const unsigned Lsb = LeftShAmt;
+    const unsigned Len = llvm::countr_one(Mask) - 1;
+    ReplaceNode(Node, BitfieldInsert(CurDAG, X, Lsb, Len, DL, VT, false).getNode());
+    return true;
+  }
+
+  return false;
+}
+
+// pack $rd, $rs1, $rs2, $shamt => $rd = {$rs2[15-shamt:0], $rs1[$shamt-1:0]};
+bool SodiumDAGToDAGISel::tryBitfieldPackfromOrSHL(SelectionDAG *CurDAG, SDNode *Node) {
+  SDValue N0 = Node->getOperand(0);
+  SDValue N1 = Node->getOperand(1);
+
+  //fold or (sll y, C1), x
+  //  => pack x, y, C1
+  SDValue X, Y;
+  if (N0.getOpcode() == ISD::SHL && N0.hasOneUse()) { X = N1;  Y = N0; }
+  else
+  if (N1.getOpcode() == ISD::SHL && N1.hasOneUse()) { X = N0;  Y = N1; }
+  else return false;
+
+  SDLoc DL(Node);
+  MVT VT = Node->getSimpleValueType(0);
+
+  auto *ShAmt = dyn_cast<ConstantSDNode>(Y->getOperand(1));
+  if (!ShAmt)
+    return false;
+
+  uint64_t NotKnownZero = (~CurDAG->computeKnownBits(X).Zero).getZExtValue();
+  uint64_t Lsb = ShAmt->getZExtValue();
+  if (NotKnownZero & maskTrailingZeros<uint64_t>(Lsb)) return false;
+
+  ReplaceNode(Node, CurDAG->getMachineNode(Sodium::PACK, DL, VT,
+                                           X,
+                                           Y.getOperand(0),
+                                           CurDAG->getTargetConstant(Lsb, DL, VT)));
+  return true;
 }
 
 // For operations of the form ??? (sll x, C1), C2, check if we can use
@@ -195,37 +313,5 @@ bool SodiumDAGToDAGISel::tryShrinkShlLogicImm(SelectionDAG *CurDAG, SDNode *Node
                                         SDValue(BinOp, 0),
                                         CurDAG->getTargetConstant(ShAmt, DL, VT));
   ReplaceNode(Node, SLLI);
-  return true;
-}
-
-//fold or (sll y, C1), x
-//  => pack x, y, C1
-//
-//pack $rd, $rs1, $rs2, $shamt => $rd = {$rs2[15-shamt:0], $rs1[$shamt-1:0]};
-bool SodiumDAGToDAGISel::tryBitfieldPackfromOrSHL(SelectionDAG *CurDAG, SDNode *Node) {
-  SDValue N0 = Node->getOperand(0);
-  SDValue N1 = Node->getOperand(1);
-
-  SDValue X, Y;
-  if (N0.getOpcode() == ISD::SHL && N0.hasOneUse()) { X = N1; Y = N0; }
-  else
-  if (N1.getOpcode() == ISD::SHL && N1.hasOneUse()) { X = N0; Y = N1; }
-  else return false;
-
-  SDLoc DL(Node);
-  MVT VT = Node->getSimpleValueType(0);
-
-  auto *ShAmt = dyn_cast<ConstantSDNode>(Y->getOperand(1));
-  if (!ShAmt)
-    return false;
-
-  uint64_t NotKnownZero = (~CurDAG->computeKnownBits(X).Zero).getZExtValue();
-  uint64_t Lsb = ShAmt->getZExtValue();
-  if (llvm::countl_zero(NotKnownZero) + Lsb < VT.getSizeInBits()) return false;
-
-  ReplaceNode(Node, CurDAG->getMachineNode(Sodium::BFPK, DL, VT,
-                                           X,
-                                           Y.getOperand(0),
-                                           CurDAG->getTargetConstant(Lsb, DL, VT)));
   return true;
 }

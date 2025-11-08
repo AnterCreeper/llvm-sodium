@@ -29,10 +29,6 @@ enum NodeType : unsigned {
   Ret,
   ERet,
   LLA,
-  BFPK,
-  BFMG,
-  SBFX,
-  UBFX
 };
 } // end namespace SodiumISD
 
@@ -105,6 +101,7 @@ private:
 
   SDValue LowerBR_JT(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerVASTART(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerSelect(SDValue Op, SelectionDAG &DAG) const;
 };
 
 static const unsigned ISD_LEGAL[] = {
@@ -115,15 +112,18 @@ static const unsigned ISD_EXPAND[] = {
   ISD::BR_CC, ISD::SELECT_CC,
   ISD::CTPOP, ISD::PARITY,
   ISD::SDIV, ISD::UDIV, ISD::SREM, ISD::UREM,
-  ISD::SDIVREM, ISD::UDIVREM
+  ISD::SDIVREM, ISD::UDIVREM,
+  ISD::SHL_PARTS, ISD::SRA_PARTS, ISD::SRL_PARTS
 }; //ISD::SMUL_LOHI, ISD::UMUL_LOHI
 static const unsigned ISD_CUSTOM[] = {
   //Constant will be process in ISelDAGToDAG
   ISD::GlobalAddress, ISD::BlockAddress, ISD::ConstantPool, ISD::JumpTable
 };
+
 static const ISD::NodeType ISD_COMBINE[] = {
   ISD::ADD, ISD::SUB,
   ISD::AND, ISD::OR, ISD::XOR,
+  ISD::MUL,
   ISD::LOAD, ISD::STORE,
   ISD::BR_CC, ISD::SELECT_CC
 };

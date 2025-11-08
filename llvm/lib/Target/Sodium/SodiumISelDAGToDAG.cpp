@@ -108,17 +108,20 @@ void SodiumDAGToDAGISel::Select(SDNode *Node) {
     if (tryShrinkShlLogicImm(CurDAG, Node, Sodium::XORI)) return;
     break;
   case ISD::AND:
-    if (tryBitfieldExtractOpfromAND(CurDAG, Node)) return;
+    if (tryBitfieldOpfromAND(CurDAG, Node)) return;
     if (tryShrinkShlLogicImm(CurDAG, Node, Sodium::ANDI)) return;
     break;
   case ISD::SRA:
-    if (tryBitfieldExtractOpfromSHR(CurDAG, Node, true)) return;
+    if (tryBitfieldOpfromSHR(CurDAG, Node, true)) return;
     break;
   case ISD::SRL:
-    if (tryBitfieldExtractOpfromSHR(CurDAG, Node, false)) return;
+    if (tryBitfieldOpfromSHR(CurDAG, Node, false)) return;
+    break;
+  case ISD::SHL:
+    if (tryBitfieldInsertOpfromSHL(CurDAG, Node)) return;
     break;
   case ISD::SIGN_EXTEND_INREG:
-    if (tryBitfieldExtractOpfromSExtInReg(CurDAG, Node)) return;
+    if (tryBitfieldOpfromSExtInReg(CurDAG, Node)) return;
     break;
   }
   // Select the default instruction.

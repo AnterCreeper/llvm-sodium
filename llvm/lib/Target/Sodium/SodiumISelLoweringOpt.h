@@ -2,7 +2,6 @@ static SDValue combineAddOfBooleanXor(SDNode *N, SelectionDAG &DAG) {
   SDValue N0 = N->getOperand(0);
   SDValue N1 = N->getOperand(1);
   EVT VT = N->getValueType(0);
-  SDLoc DL(N);
 
   // RHS should be -1.
   if (!isAllOnesConstant(N1))
@@ -14,10 +13,12 @@ static SDValue combineAddOfBooleanXor(SDNode *N, SelectionDAG &DAG) {
     return SDValue();
 
   // Emit a negate of the setcc.
+  SDLoc DL(N);
   return DAG.getNode(ISD::SUB, DL, VT, DAG.getConstant(0, DL, VT),
                      N0.getOperand(0));
 }
 
+//combine and+sll into shadd
 static SDValue combineAddShlImm(SDNode *N, SelectionDAG &DAG) {
   // Skip for larger types.
   EVT VT = N->getValueType(0);
@@ -61,6 +62,7 @@ static SDValue combineAddShlImm(SDNode *N, SelectionDAG &DAG) {
 static SDValue combineDeMorganOfBoolean(SDNode *N, SelectionDAG &DAG) {
   SDValue N0 = N->getOperand(0);
   SDValue N1 = N->getOperand(1);
+  EVT VT = N->getValueType(0);
   bool IsAnd = N->getOpcode() == ISD::AND;
 
   if (N0.getOpcode() != ISD::XOR || N1.getOpcode() != ISD::XOR)
@@ -85,7 +87,6 @@ static SDValue combineDeMorganOfBoolean(SDNode *N, SelectionDAG &DAG) {
   } else
     return SDValue();
 
-  EVT VT = N->getValueType(0);
 
   SDValue N00 = N0.getOperand(0);
   SDValue N10 = N1.getOperand(0);
@@ -100,4 +101,87 @@ static SDValue combineDeMorganOfBoolean(SDNode *N, SelectionDAG &DAG) {
   unsigned Opc = IsAnd ? ISD::OR : ISD::AND;
   SDValue Logic = DAG.getNode(Opc, DL, VT, N00, N10);
   return DAG.getNode(ISD::XOR, DL, VT, Logic, DAG.getConstant(1, DL, VT));
+}
+
+// optimize boolean logic to select which will be legalized into cond move.
+static SDValue combineAndSetCCToCMOV(SDNode *N, SelectionDAG &DAG) {
+  if (N->getOpcode() != ISD::AND)
+    return SDValue();
+
+  SDValue N0 = N->getOperand(0);
+  SDValue N1 = N->getOperand(1);
+  EVT VT = N->getValueType(0);
+
+  auto IsEqualCompZero = [](SDValue &V) -> bool {
+    if (V.getOpcode() == ISD::SETCC && isNullConstant(V.getOperand(1))) {
+      ISD::CondCode CC = cast<CondCodeSDNode>(V.getOperand(2))->get();
+      if (ISD::isIntEqualitySetCC(CC))
+        return true;
+    }
+    return false;
+  };
+
+  if (!IsEqualCompZero(N0) || !N0.hasOneUse())
+    std::swap(N0, N1);
+  if (!IsEqualCompZero(N0) || !N0.hasOneUse())
+    return SDValue();
+
+  KnownBits Known = DAG.computeKnownBits(N1);
+  if (Known.getMaxValue().ugt(1))
+    return SDValue();
+
+  SDLoc DL(N);
+  return DAG.getNode(ISD::SELECT, DL, VT, N0, N1, DAG.getConstant(0, DL, VT));
+}
+
+static SDValue expandMULtoSHLADD(SDNode *N, TargetLowering::DAGCombinerInfo &DCI,
+                                 SDValue X, ConstantSDNode* C) {
+  SelectionDAG &DAG = DCI.DAG;
+
+  SDLoc DL(N);
+  EVT VT = N->getValueType(0);
+
+  int64_t MulAmt = C->getSExtValue();
+  unsigned ShiftAmt = llvm::countr_zero<uint64_t>(MulAmt) & (16 - 1);
+  MulAmt >>= ShiftAmt;
+
+  SDValue Res;
+  if (MulAmt >= 0) {
+    if (llvm::has_single_bit<uint32_t>(MulAmt - 1)) {
+      // fold mul x, 2^N + 1 => add (shl x, N), x
+      Res = DAG.getNode(ISD::ADD, DL, VT,
+                        DAG.getNode(ISD::SHL, DL, VT,
+                                    X,
+                                    DAG.getConstant(Log2_32(MulAmt - 1), DL, MVT::i16)),
+                        X);
+    } else if (llvm::has_single_bit<uint32_t>(MulAmt + 1)) {
+      // fold mul x, 2^N - 1 => sub (shl x, N), x
+      Res = DAG.getNode(ISD::SUB, DL, VT,
+                        DAG.getNode(ISD::SHL, DL, VT,
+                                    X,
+                                    DAG.getConstant(Log2_32(MulAmt + 1), DL, MVT::i16)),
+                        X);
+    } else
+      return SDValue();
+  } else {
+    uint64_t MulAmtAbs = -MulAmt;
+    if (llvm::has_single_bit<uint32_t>(MulAmtAbs + 1)) {
+      // fold mul x, -(2^N - 1) => sub x, (shl x, N)
+      Res = DAG.getNode(ISD::SUB, DL, VT,
+                        X,
+                        DAG.getNode(ISD::SHL, DL, VT,
+                                    X,
+                                    DAG.getConstant(Log2_32(MulAmtAbs + 1), DL, MVT::i16)));
+    } else
+      return SDValue();
+  }
+
+  if (ShiftAmt != 0)
+    Res = DAG.getNode(ISD::SHL, DL, VT,
+                      Res,
+                      DAG.getConstant(ShiftAmt, DL, MVT::i16));
+
+  // Do not add new nodes to DAG combiner worklist.
+  DCI.CombineTo(N, Res, false);
+  return SDValue();
 }

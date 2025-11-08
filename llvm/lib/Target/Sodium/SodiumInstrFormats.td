@@ -148,19 +148,19 @@ class FMT_I<bits<3> func3, bits<3> tag3, dag outs, dag ins, string opcodestr, st
   let Inst{8-4}   = rd;
 }
 
-//variation of FMT_I for UBFX/SBFX
-class FMT_II<bits<3> func3, bits<3> tag3, dag outs, dag ins, string opcodestr, string argstr>
+//variation of FMT_I for BFI/BFX
+class FMT_II<bits<3> func3, bits<3> tag3, bits<1> ifsigned, dag outs, dag ins, string opcodestr, string argstr>
   : SodiumInst<outs, ins, opcodestr, argstr, []>
 {
-  bits<4> lsb;
   bits<4> len;
+  bits<4> lsb;
   bits<5> rd;
   bits<5> rs;
 
   let opcode      = 0b1111;
   let Inst{31-30} = tag3{2-1};
   let Inst{29}    = len{0};   //imm[0]
-  let Inst{28}    = 0;        //imm[12]
+  let Inst{28}    = ifsigned; //imm[12]
   let Inst{27-24} = lsb;      //imm[11:8]
   let Inst{23-20} = 0;        //imm[7:4]
   let Inst{19-17} = len{3-1}; //imm[3:1]

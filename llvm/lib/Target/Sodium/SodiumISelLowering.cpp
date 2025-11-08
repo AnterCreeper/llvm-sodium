@@ -147,10 +147,6 @@ const char *SodiumTargetLowering::getTargetNodeName(unsigned Opcode) const {
     NODE_NAME_CASE(Ret)
     NODE_NAME_CASE(ERet)
     NODE_NAME_CASE(LLA)
-    NODE_NAME_CASE(BFPK)
-    NODE_NAME_CASE(BFMG)
-    NODE_NAME_CASE(SBFX)
-    NODE_NAME_CASE(UBFX)
   }
   // clang-format on
   return nullptr;
@@ -174,6 +170,8 @@ SodiumTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
       return LowerBR_JT(Op, DAG);
     case ISD::VASTART:
       return LowerVASTART(Op, DAG);
+    case ISD::SELECT:
+      return LowerSelect(Op, DAG);
   }
   return SDValue();
 }
@@ -377,6 +375,60 @@ SDValue SodiumTargetLowering::LowerVASTART(SDValue Op, SelectionDAG &DAG) const 
                       MachinePointerInfo(SV));
 }
 
+static std::optional<bool> matchSetCC(SDValue LHS, SDValue RHS,
+                                      ISD::CondCode CC, SDValue Val) {
+  assert(Val->getOpcode() == ISD::SETCC);
+  SDValue LHS2 = Val.getOperand(0);
+  SDValue RHS2 = Val.getOperand(1);
+  ISD::CondCode CC2 = cast<CondCodeSDNode>(Val.getOperand(2))->get();
+
+  if (LHS == LHS2 && RHS == RHS2) {
+    if (CC == CC2)
+      return true;
+    if (CC == ISD::getSetCCInverse(CC2, LHS2.getValueType()))
+      return false;
+  } else if (LHS == RHS2 && RHS == LHS2) {
+    CC2 = ISD::getSetCCSwappedOperands(CC2);
+    if (CC == CC2)
+      return true;
+    if (CC == ISD::getSetCCInverse(CC2, LHS2.getValueType()))
+      return false;
+  }
+  return std::nullopt;
+}
+
+SDValue SodiumTargetLowering::LowerSelect(SDValue Op, SelectionDAG &DAG) const {
+  SDNode *N = Op.getNode();
+  SDValue CondV = N->getOperand(0);
+  SDValue TrueV = N->getOperand(1);
+  SDValue FalseV = N->getOperand(2);
+  MVT VT = N->getSimpleValueType(0);
+
+  // Try to fold (select (setcc lhs, rhs, cc), truev, falsev) into bitwise ops
+  // when both truev and falsev are also setcc.
+  SDLoc DL(N);
+  if (CondV.getOpcode() == ISD::SETCC && TrueV.getOpcode() == ISD::SETCC &&
+      FalseV.getOpcode() == ISD::SETCC) {
+    SDValue LHS = CondV.getOperand(0);
+    SDValue RHS = CondV.getOperand(1);
+    ISD::CondCode CC = cast<CondCodeSDNode>(CondV.getOperand(2))->get();
+
+    // (select x, x, y) -> x | y
+    // (select !x, x, y) -> x & y
+    if (std::optional<bool> MatchResult = matchSetCC(LHS, RHS, CC, TrueV)) {
+      return DAG.getNode(*MatchResult ? ISD::OR : ISD::AND, DL, VT, TrueV,
+                         DAG.getFreeze(FalseV));
+    }
+    // (select x, y, x) -> x & y
+    // (select !x, y, x) -> x | y
+    if (std::optional<bool> MatchResult = matchSetCC(LHS, RHS, CC, FalseV)) {
+      return DAG.getNode(*MatchResult ? ISD::AND : ISD::OR, DL, VT,
+                         DAG.getFreeze(TrueV), FalseV);
+    }
+  }
+  return SDValue();
+}
+
 #include "SodiumISelLoweringOpt.h"
 
 static SDValue performADDCombine(SDNode *N, SelectionDAG &DAG) {
@@ -408,12 +460,31 @@ static SDValue performSUBCombine(SDNode *N, SelectionDAG &DAG) {
   return SDValue();
 }
 
+static SDValue performMULCombine(SDNode *N,
+                                 TargetLowering::DAGCombinerInfo &DCI) {
+  SDLoc DL(N);
+  ConstantSDNode *C = dyn_cast<ConstantSDNode>(N->getOperand(1));
+  if (!C) return SDValue();
+
+  SDValue X = N->getOperand(0);
+  //fold mul x, C => and/sub (shl x, ShiftAmt), (-)x
+  if (SDValue V = expandMULtoSHLADD(N, DCI, X, C))
+    return V;
+
+  return SDValue();
+}
+
 static SDValue performLogicCombine(SDNode *N,
                                    TargetLowering::DAGCombinerInfo &DCI) {
   SelectionDAG &DAG = DCI.DAG;
-  if (DCI.isAfterLegalizeDAG())
+  if (DCI.isAfterLegalizeDAG()) {
+    // fold and (setcc c, 0, ne), (i1)f => select (c, 0, ne), f, 0 => f = (movz c, zero)
+    //      and (setcc c, 0, eq), (i1)f => select (c, 0, eq), f, 0 => f = (movn c, zero)
+    if (SDValue V = combineAndSetCCToCMOV(N, DAG))
+      return V;
     if (SDValue V = combineDeMorganOfBoolean(N, DAG))
       return V;
+  }
   return SDValue();
 }
 
@@ -441,59 +512,6 @@ static SDValue performXORCombine(SDNode *N, SelectionDAG &DAG) {
                             DAG.getConstant(Imm + 1, DL, VT), CC);
     }
   }
-  return SDValue();
-}
-
-
-static SDValue performMULCombine(SDNode *N,
-                                 TargetLowering::DAGCombinerInfo &DCI) {
-  SDLoc DL(N);
-  SelectionDAG &DAG = DCI.DAG;
-  ConstantSDNode *C = dyn_cast<ConstantSDNode>(N->getOperand(1));
-  if (!C) return SDValue();
-
-  int64_t MulAmt = C->getSExtValue();
-  unsigned ShiftAmt = llvm::countr_zero<uint64_t>(MulAmt) & (16 - 1);
-  MulAmt >>= ShiftAmt;
-
-  EVT VT = N->getValueType(0);
-  SDValue X = N->getOperand(0);
-  SDValue Res;
-  if (MulAmt >= 0) {
-    if (llvm::has_single_bit<uint32_t>(MulAmt - 1)) {
-      // fold mul x, 2^N + 1 => add (shl x, N), x
-      Res = DAG.getNode(ISD::ADD, DL, VT,
-                        DAG.getNode(ISD::SHL, DL, VT,
-                                    X,
-                                    DAG.getConstant(Log2_32(MulAmt - 1), DL, MVT::i16)),
-                        X);
-    } else if (llvm::has_single_bit<uint32_t>(MulAmt + 1)) {
-      // fold mul x, 2^N - 1 => sub (shl x, N), x
-      Res = DAG.getNode(ISD::SUB, DL, VT,
-                        DAG.getNode(ISD::SHL, DL, VT,
-                                    X,
-                                    DAG.getConstant(Log2_32(MulAmt + 1), DL, MVT::i16)),
-                        X);
-    } else
-      return SDValue();
-  } else {
-    uint64_t MulAmtAbs = -MulAmt;
-    if (llvm::has_single_bit<uint32_t>(MulAmtAbs + 1)) {
-      // fold mul x, -(2^N - 1) => sub x, (shl x, N)
-      Res = DAG.getNode(ISD::SUB, DL, VT,
-                        X,
-                        DAG.getNode(ISD::SHL, DL, VT,
-                                    X,
-                                    DAG.getConstant(Log2_32(MulAmtAbs + 1), DL, MVT::i16)));
-    } else
-      return SDValue();
-  }
-  if (ShiftAmt != 0)
-    Res = DAG.getNode(ISD::SHL, DL, VT,
-                      Res, DAG.getConstant(ShiftAmt, DL, MVT::i16));
-
-  // Do not add new nodes to DAG combiner worklist.
-  DCI.CombineTo(N, Res, false);
   return SDValue();
 }
 
@@ -530,13 +548,13 @@ SDValue SodiumTargetLowering::PerformDAGCombine(SDNode *N,
     return performADDCombine(N, DAG);
   case ISD::SUB:
     return performSUBCombine(N, DAG);
+  case ISD::MUL:
+    return performMULCombine(N, DCI);
   case ISD::XOR:
     return performXORCombine(N, DAG);
   case ISD::OR:
   case ISD::AND:
     return performLogicCombine(N, DCI);
-  case ISD::MUL:
-    return performMULCombine(N, DCI);
   case ISD::LOAD:
   case ISD::STORE:
     return performMemPairCombine(N, DCI);

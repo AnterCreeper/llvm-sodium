@@ -47,11 +47,10 @@ public:
 private:
   bool tryShrinkShlLogicImm(SelectionDAG *CurDAG, SDNode *Node, unsigned BinOpc);
 
-  bool tryBitfieldExtractOpfromAND(SelectionDAG *CurDAG, SDNode *Node);
-  bool tryBitfieldExtractOpfromSExtInReg(SelectionDAG *CurDAG, SDNode *Node);
-  bool tryBitfieldExtractOpfromSHR(SelectionDAG *CurDAG, SDNode *Node,
-                                   bool isSigned);
-
+  bool tryBitfieldOpfromSHR(SelectionDAG *CurDAG, SDNode *Node, bool isSigned);
+  bool tryBitfieldOpfromAND(SelectionDAG *CurDAG, SDNode *Node);
+  bool tryBitfieldOpfromSExtInReg(SelectionDAG *CurDAG, SDNode *Node);
+  bool tryBitfieldInsertOpfromSHL(SelectionDAG *CurDAG, SDNode *Node);
   bool tryBitfieldPackfromOrSHL(SelectionDAG *CurDAG, SDNode *Node);
 
 };
