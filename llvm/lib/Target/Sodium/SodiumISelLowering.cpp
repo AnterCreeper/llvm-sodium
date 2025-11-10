@@ -92,44 +92,44 @@ SodiumTargetLowering::SodiumTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::PREFETCH, MVT::Other, Legal);
   setOperationAction({ISD::TRAP, ISD::DEBUGTRAP}, MVT::Other, Legal);
 
-  // v2i16 stuffs, which derived from Sparc Target.
-  /*
-    // On 32bit sodium, we define a double-register 16bit register
-    // class, as well. This is modeled in LLVM as a 2-vector of i16.
-    addRegisterClass(MVT::v2i16, &Sodium::IntPairRegClass);
+  // derived from Sparc Target.
+  // On 32bit sodium, we define a double-register 16bit register
+  // class, as well. This is modeled in LLVM as a 2-vector of i16.
+  addRegisterClass(MVT::v2i16, &Sodium::IntPairRegClass);
 
-    // ...but almost all operations must be expanded, so set that as
-    // the default.
-    for (unsigned Op = 0; Op < ISD::BUILTIN_OP_END; ++Op) {
-      setOperationAction(Op, MVT::v2i16, Expand);
-    }
-    // Truncating/extending stores/loads are also not supported.
-    for (MVT VT : MVT::integer_fixedlen_vector_valuetypes()) {
-      setLoadExtAction(ISD::SEXTLOAD, VT, MVT::v2i16, Expand);
-      setLoadExtAction(ISD::ZEXTLOAD, VT, MVT::v2i16, Expand);
-      setLoadExtAction(ISD::EXTLOAD, VT, MVT::v2i16, Expand);
+  // ...but almost all operations must be expanded, so set that as
+  // the default.
+  for (unsigned Op = 0; Op < ISD::BUILTIN_OP_END; ++Op) {
+    setOperationAction(Op, MVT::v2i16, Expand);
+  }
 
-      setLoadExtAction(ISD::SEXTLOAD, MVT::v2i16, VT, Expand);
-      setLoadExtAction(ISD::ZEXTLOAD, MVT::v2i16, VT, Expand);
-      setLoadExtAction(ISD::EXTLOAD, MVT::v2i16, VT, Expand);
+  // Truncating/extending stores/loads are also not supported.
+  for (MVT VT : MVT::integer_fixedlen_vector_valuetypes()) {
+    setLoadExtAction(ISD::SEXTLOAD, VT, MVT::v2i16, Expand);
+    setLoadExtAction(ISD::ZEXTLOAD, VT, MVT::v2i16, Expand);
+    setLoadExtAction(ISD::EXTLOAD, VT, MVT::v2i16, Expand);
 
-      setTruncStoreAction(VT, MVT::v2i16, Expand);
-      setTruncStoreAction(MVT::v2i16, VT, Expand);
-    }
-    // However, load and store *are* legal.
-    setOperationAction(ISD::LOAD, MVT::v2i16, Legal);
-    setOperationAction(ISD::STORE, MVT::v2i16, Legal);
-    setOperationAction(ISD::EXTRACT_VECTOR_ELT, MVT::v2i16, Legal);
-    setOperationAction(ISD::BUILD_VECTOR, MVT::v2i16, Legal);
+    setLoadExtAction(ISD::SEXTLOAD, MVT::v2i16, VT, Expand);
+    setLoadExtAction(ISD::ZEXTLOAD, MVT::v2i16, VT, Expand);
+    setLoadExtAction(ISD::EXTLOAD, MVT::v2i16, VT, Expand);
 
-    // And we need to promote i32 loads/stores into vector load/store
-    setOperationAction(ISD::LOAD, MVT::i32, Custom);
-    setOperationAction(ISD::STORE, MVT::i32, Custom);
+    setTruncStoreAction(VT, MVT::v2i16, Expand);
+    setTruncStoreAction(MVT::v2i16, VT, Expand);
+  }
+  // However, load and store *are* legal.
+  setOperationAction({ISD::EXTRACT_VECTOR_ELT, ISD::BUILD_VECTOR,
+                      ISD::LOAD, ISD::STORE}, MVT::v2i16, Legal);
 
-    // Sadly, this doesn't work:
-    //AddPromotedToType(ISD::LOAD, MVT::i32, MVT::v2i16);
-    //AddPromotedToType(ISD::STORE, MVT::i32, MVT::v2i16);
-  */
+  // And we need to promote i32 loads/stores into vector load/store
+  setOperationAction(ISD::LOAD, MVT::i32, Custom);
+  setOperationAction(ISD::STORE, MVT::i32, Custom);
+
+  // Sadly, this doesn't work:
+  //AddPromotedToType(ISD::LOAD, MVT::i32, MVT::v2i16);
+  //AddPromotedToType(ISD::STORE, MVT::i32, MVT::v2i16);
+
+  setOperationAction(ISD::ADD, MVT::i32, Custom);
+  setOperationAction(ISD::SUB, MVT::i32, Custom);
 }
 
 const char *SodiumTargetLowering::getTargetNodeName(unsigned Opcode) const {
@@ -147,6 +147,8 @@ const char *SodiumTargetLowering::getTargetNodeName(unsigned Opcode) const {
     NODE_NAME_CASE(Ret)
     NODE_NAME_CASE(ERet)
     NODE_NAME_CASE(LLA)
+    NODE_NAME_CASE(Mul32)
+    NODE_NAME_CASE(Mulu32)
   }
   // clang-format on
   return nullptr;
@@ -158,22 +160,91 @@ const char *SodiumTargetLowering::getTargetNodeName(unsigned Opcode) const {
 SDValue
 SodiumTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   switch (Op.getOpcode()) {
-    case ISD::GlobalAddress:
-      return LowerGlobalAddress(Op, DAG);
-    case ISD::BlockAddress:
-      return LowerSimpleAddress<BlockAddressSDNode>(Op, DAG);
-    case ISD::ConstantPool:
-      return LowerSimpleAddress<ConstantPoolSDNode>(Op, DAG);
-    case ISD::JumpTable:
-      return LowerSimpleAddress<JumpTableSDNode>(Op, DAG);
-    case ISD::BR_JT:
-      return LowerBR_JT(Op, DAG);
-    case ISD::VASTART:
-      return LowerVASTART(Op, DAG);
-    case ISD::SELECT:
-      return LowerSelect(Op, DAG);
+  case ISD::GlobalAddress:
+    return LowerGlobalAddress(Op, DAG);
+  case ISD::BlockAddress:
+    return LowerSimpleAddress<BlockAddressSDNode>(Op, DAG);
+  case ISD::ConstantPool:
+    return LowerSimpleAddress<ConstantPoolSDNode>(Op, DAG);
+  case ISD::JumpTable:
+    return LowerSimpleAddress<JumpTableSDNode>(Op, DAG);
+  case ISD::BR_JT:
+    return LowerBR_JT(Op, DAG);
+  case ISD::VASTART:
+    return LowerVASTART(Op, DAG);
+  case ISD::SELECT:
+    return LowerSelect(Op, DAG);
+  case ISD::SMUL_LOHI:
+    return LowerMUL_LOHI(Op, DAG, true);
+  case ISD::UMUL_LOHI:
+    return LowerMUL_LOHI(Op, DAG, false);
+  case ISD::STORE: {
+    // Custom handling for i32 stores: turn it into a bitcast and a
+    // v2i16 store.
+    SDLoc DL(Op);
+    StoreSDNode *St = cast<StoreSDNode>(Op.getNode());
+    if (St->getMemoryVT() != MVT::i32)
+      break;
+
+    SDValue Op0 = DAG.getNode(ISD::BITCAST, DL, MVT::v2i16, St->getValue());
+    SDValue Chain = DAG.getStore(St->getChain(), DL, Op0,
+                                 St->getBasePtr(), St->getPointerInfo(),
+                                 St->getOriginalAlign(), St->getMemOperand()->getFlags(),
+                                 St->getAAInfo());
+    return Chain;
+  }
   }
   return SDValue();
+}
+
+void SodiumTargetLowering::ReplaceNodeResults(SDNode *N,
+                                              SmallVectorImpl<SDValue>& Results,
+                                              SelectionDAG &DAG) const {
+  SDLoc DL(N);
+  switch (N->getOpcode()) {
+  default:
+    llvm_unreachable("Do not know how to custom type legalize this operation!");
+  case ISD::LOAD: {
+    // Custom handling only for i32: turn i32 load into a v2i16 load,
+    // and a bitcast.
+    LoadSDNode *Ld = cast<LoadSDNode>(N);
+    if (Ld->getValueType(0) != MVT::i32 || Ld->getMemoryVT() != MVT::i32)
+      break;
+
+    SDValue Op0 = DAG.getExtLoad(Ld->getExtensionType(), DL, MVT::v2i16, Ld->getChain(),
+                                 Ld->getBasePtr(), Ld->getPointerInfo(), MVT::v2i16,
+                                 Ld->getOriginalAlign(), Ld->getMemOperand()->getFlags(),
+                                 Ld->getAAInfo());
+    SDValue Chain = DAG.getNode(ISD::BITCAST, DL, MVT::i32, Op0);
+    Results.push_back(Chain);
+    Results.push_back(Op0.getValue(1));
+    break;
+  }
+  }
+}
+
+/*
+// Expand i32 add/sub(i32, i32)
+SDValue SodiumTargetLowering::LowerAddSub(SDValue Op, SelectionDAG &DAG, NodeType Opc) const {
+  SDLoc DL(Op);
+  SDNode *N = Op.getNode();
+  if (N->getValueType() != MVT::i32) return SDValue();
+  //Check if extended from i16, which doens't need bitcast
+  SDValue Op0 = DAG.getNode(ISD::BITCAST, DL, MVT::v2i16, N->getOperand(0));
+  SDValue Op0 = DAG.getNode(ISD::BITCAST, DL, MVT::v2i16, N->getOperand(1));
+  return Chain;
+}
+*/
+
+SDValue SodiumTargetLowering::LowerMUL_LOHI(SDValue Op, SelectionDAG &DAG, bool isSigned) const {
+  SDLoc DL(Op);
+  SDNode *N = Op.getNode();
+  SDValue Op0 = DAG.getNode(isSigned ? SodiumISD::Mul32 : SodiumISD::Mulu32,
+                            DL, MVT::v2i16,
+                            N->getOperand(0),
+                            N->getOperand(1));
+  SDValue Chain = DAG.getNode(ISD::BITCAST, DL, MVT::i32, Op0);
+  return Chain;
 }
 
 template<typename T> void
@@ -616,54 +687,19 @@ SodiumTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI
   if (Constraint.size() == 1) {
     switch (Constraint[0]) {
     case 'r':
-      return std::make_pair(0U, &Sodium::IntNoX0RegClass);
+      if (VT == MVT::v2i16)
+        return std::make_pair(0U, &Sodium::PairNoX0RegClass);
+      else
+        return std::make_pair(0U, &Sodium::RegsNoX0RegClass);
     default:
       break;
     }
   }
 
-/*
   // Clang will correctly decode the usage of register name aliases into their
   // official names. However, other frontends like `rustc` do not. This allows
   // users of these frontends to use the ABI names for registers in LLVM-style
   // register constraints.
-  unsigned XRegFromAlias = StringSwitch<unsigned>(Constraint.lower())
-                               .Case("{zero}", Sodium::X0)
-                               .Case("{ra}", Sodium::X1)
-                               .Case("{sp}", Sodium::X2)
-                               .Case("{gp}", Sodium::X3)
-                               .Case("{tp}", Sodium::X4)
-                               .Case("{t0}", Sodium::X5)
-                               .Case("{t1}", Sodium::X6)
-                               .Case("{t2}", Sodium::X7)
-                               .Cases("{s0}", "{fp}", Sodium::X8)
-                               .Case("{s1}", Sodium::X9)
-                               .Case("{a0}", Sodium::X10)
-                               .Case("{a1}", Sodium::X11)
-                               .Case("{a2}", Sodium::X12)
-                               .Case("{a3}", Sodium::X13)
-                               .Case("{a4}", Sodium::X14)
-                               .Case("{a5}", Sodium::X15)
-                               .Case("{a6}", Sodium::X16)
-                               .Case("{a7}", Sodium::X17)
-                               .Case("{s2}", Sodium::X18)
-                               .Case("{s3}", Sodium::X19)
-                               .Case("{s4}", Sodium::X20)
-                               .Case("{s5}", Sodium::X21)
-                               .Case("{s6}", Sodium::X22)
-                               .Case("{s7}", Sodium::X23)
-                               .Case("{s8}", Sodium::X24)
-                               .Case("{s9}", Sodium::X25)
-                               .Case("{s10}", Sodium::X26)
-                               .Case("{s11}", Sodium::X27)
-                               .Case("{t3}", Sodium::X28)
-                               .Case("{t4}", Sodium::X29)
-                               .Case("{t5}", Sodium::X30)
-                               .Case("{t6}", Sodium::X31)
-                               .Default(Sodium::NoRegister);
-  if (XRegFromAlias != Sodium::NoRegister)
-    return std::make_pair(XRegFromAlias, &Sodium::IntRegsRegClass);
-*/
 
   std::pair<Register, const TargetRegisterClass *> Res =
       TargetLowering::getRegForInlineAsmConstraint(TRI, Constraint, VT);

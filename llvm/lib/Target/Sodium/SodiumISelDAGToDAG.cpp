@@ -72,6 +72,9 @@ bool SodiumDAGToDAGISel::SelectInlineAsmMemoryOperand(const SDValue &Op, unsigne
 
 #include "SodiumISelDAGToDAGOpt.h"
 
+#define SelectSodium(Opc) \
+  ReplaceNode(Node, CurDAG->getMachineNode((Opc), DL, VT, Node->getOperand(0), Node->getOperand(1)));
+
 void SodiumDAGToDAGISel::Select(SDNode *Node) {
   if (Node->isMachineOpcode()) {
     Node->setNodeId(-1);
@@ -123,6 +126,14 @@ void SodiumDAGToDAGISel::Select(SDNode *Node) {
   case ISD::SIGN_EXTEND_INREG:
     if (tryBitfieldOpfromSExtInReg(CurDAG, Node)) return;
     break;
+  case SodiumISD::Mul32: {
+    SelectSodium(Sodium::MULD);
+    return;
+  }
+  case SodiumISD::Mulu32: {
+    SelectSodium(Sodium::MULDU);
+    return;
+  }
   }
   // Select the default instruction.
   SelectCode(Node);

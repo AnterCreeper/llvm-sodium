@@ -106,4 +106,5 @@ def IntPair : RegisterClass<"Sodium", [v2i16], 32,
                                  (sequence "D%u", 9, 13),   //s2-s11
                                  (sequence "D%u", 0, 3))>;  //zero, ra, sp, tp
 
-def IntNoX0 : RegisterClass<"Sodium", [i16], 16, (sub IntRegs, X0)>;
+def RegsNoX0 : RegisterClass<"Sodium", [i16], 16, (sub IntRegs, X0)>;
+def PairNoX0 : RegisterClass<"Sodium", [v2i16], 32, (sub IntPair, D0)>;

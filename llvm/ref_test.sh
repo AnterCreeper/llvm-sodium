@@ -1,5 +1,5 @@
 #!/bin/bash
-target=riscv32
+target=aarch64
 #target=arm
 clang ~/main.c -c -emit-llvm -O$1 --target=$target -o ~/main.bc
 llvm-dis ~/main.bc

@@ -29,6 +29,8 @@ enum NodeType : unsigned {
   Ret,
   ERet,
   LLA,
+  Mul32,
+  Mulu32
 };
 } // end namespace SodiumISD
 
@@ -41,21 +43,21 @@ public:
 
   const char *getTargetNodeName(unsigned Opcode) const override;
 
+  void ReplaceNodeResults(SDNode *N, SmallVectorImpl<SDValue>& Results,
+                          SelectionDAG &DAG) const override;
+  SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
   SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
 
-  SDValue LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool isVarArg,
-                               const SmallVectorImpl<ISD::InputArg> &Ins,
-                               const SDLoc &dl, SelectionDAG &DAG,
-                               SmallVectorImpl<SDValue> &InVals) const override;
-
-  SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
   SDValue LowerCall(TargetLowering::CallLoweringInfo &CLI,
                     SmallVectorImpl<SDValue> &InVals) const override;
   SDValue LowerReturn(SDValue Chain, CallingConv::ID CallConv, bool isVarArg,
                       const SmallVectorImpl<ISD::OutputArg> &Outs,
                       const SmallVectorImpl<SDValue> &OutVals,
                       const SDLoc &dl, SelectionDAG &DAG) const override;
-
+  SDValue LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool isVarArg,
+                               const SmallVectorImpl<ISD::InputArg> &Ins,
+                               const SDLoc &dl, SelectionDAG &DAG,
+                               SmallVectorImpl<SDValue> &InVals) const override;
 
   bool useSoftFloat() const override { return true; }
   bool shouldNormalizeToSelectSequence(LLVMContext &, EVT) const override {
@@ -102,8 +104,11 @@ private:
   SDValue LowerBR_JT(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerVASTART(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerSelect(SDValue Op, SelectionDAG &DAG) const;
+
+  SDValue LowerMUL_LOHI(SDValue Op, SelectionDAG &DAG, bool isSigned) const;
 };
 
+//Configuration of OperationAction for i16
 static const unsigned ISD_LEGAL[] = {
   ISD::CTLZ, ISD::CTTZ,
   ISD::SMIN, ISD::SMAX, ISD::UMIN, ISD::UMAX
@@ -114,12 +119,12 @@ static const unsigned ISD_EXPAND[] = {
   ISD::SDIV, ISD::UDIV, ISD::SREM, ISD::UREM,
   ISD::SDIVREM, ISD::UDIVREM,
   ISD::SHL_PARTS, ISD::SRA_PARTS, ISD::SRL_PARTS
-}; //ISD::SMUL_LOHI, ISD::UMUL_LOHI
+};
 static const unsigned ISD_CUSTOM[] = {
   //Constant will be process in ISelDAGToDAG
+  ISD::SMUL_LOHI, ISD::UMUL_LOHI,
   ISD::GlobalAddress, ISD::BlockAddress, ISD::ConstantPool, ISD::JumpTable
 };
-
 static const ISD::NodeType ISD_COMBINE[] = {
   ISD::ADD, ISD::SUB,
   ISD::AND, ISD::OR, ISD::XOR,
@@ -127,6 +132,13 @@ static const ISD::NodeType ISD_COMBINE[] = {
   ISD::LOAD, ISD::STORE,
   ISD::BR_CC, ISD::SELECT_CC
 };
+
+//Configuration of OperationAction for v2i16
+static const unsigned ISD_LEGAL32[] = {
+  ISD::LOAD, ISD::STORE,
+  ISD::EXTRACT_VECTOR_ELT, ISD::BUILD_VECTOR,
+};
+
 } // end namespace llvm
 
 #endif // LLVM_SODIUM_SODIUMISELLOWERING_H

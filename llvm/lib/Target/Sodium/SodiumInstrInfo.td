@@ -222,6 +222,13 @@ class Cache_ri<bits<3> func3, bits<2> tag2, string opcodestr>
   let rs = 0b00000;
 }
 
+class ALU_r<bits<3> func3, bits<3> tag3, bits<7> flag7, string opcodestr>
+    : FMT_R<func3, tag3, flag7, (outs IntRegs:$rd), (ins IntRegs:$rs1),
+              opcodestr, "$rd, $rs1">,
+      Sched<[WriteIALU, ReadIALU]> {
+  let rs2 = 0b00000;
+}
+
 class ALU_ri<bits<3> func3, bits<3> tag3, string opcodestr>
     : FMT_I<func3, tag3, (outs IntRegs:$rd), (ins IntRegs:$rs, simm13:$imm13),
               opcodestr, "$rd, $rs, $imm13">,
@@ -230,11 +237,6 @@ class ALU_ri<bits<3> func3, bits<3> tag3, string opcodestr>
 class BFM_rii<bits<3> func3, bits<3> tag3, bits<1> ifsigned, string opcodestr>
     : FMT_II<func3, tag3, ifsigned, (outs IntRegs:$rd), (ins IntRegs:$rs, uimm4:$lsb, uimm4:$len),
               opcodestr, "$rd, $rs, $lsb, $len">,
-      Sched<[WriteIALU, ReadIALU]>;
-
-class ALUd_di<bits<3> func3, bits<3> tag3, string opcodestr>
-    : FMT_I<func3, tag3, (outs IntPair:$rd), (ins IntPair:$rs, simm13:$imm13),
-              opcodestr, "$rd, $rs, $imm13">,
       Sched<[WriteIALU, ReadIALU]>;
 
 class ALU_rr<bits<3> func3, bits<3> tag3, bits<7> flag7, string opcodestr>
@@ -262,12 +264,10 @@ class ALUd_dr<bits<3> func3, bits<3> tag3, bits<7> flag7, string opcodestr>
               opcodestr, "$rd, $rs1, $rs2">,
       Sched<[WriteIALU, ReadIALU, ReadIALU]>;
 
-class ALU_r<bits<3> func3, bits<3> tag3, bits<7> flag7, string opcodestr>
-    : FMT_R<func3, tag3, flag7, (outs IntRegs:$rd), (ins IntRegs:$rs1),
-              opcodestr, "$rd, $rs1">,
-      Sched<[WriteIALU, ReadIALU]> {
-  let rs2 = 0b00000;
-}
+class ALUd_di<bits<3> func3, bits<3> tag3, string opcodestr>
+    : FMT_I<func3, tag3, (outs IntPair:$rd), (ins IntPair:$rs, simm13:$imm13),
+              opcodestr, "$rd, $rs, $imm13">,
+      Sched<[WriteIALU, ReadIALU]>;
 
 class CMOV_rr<bits<3> func3, bits<3> tag3, bits<7> flag7, string opcodestr>
     : FMT_R<func3, tag3, flag7, (outs IntRegs:$rd), (ins IntRegs:$T, IntRegs:$rs1, IntRegs:$rs2),
@@ -285,8 +285,8 @@ class CondB_ri<bits<3> func3, string opcodestr>
   let isTerminator = 1;
 }
 
-class HINT<bits<3> tag3, string asmstr>
-    : FMT_HT<0b000, tag3, 0, (outs), (ins), asmstr, "">;
+class HINT<bits<3> func3, bits<3> tag3, string asmstr>
+    : FMT_HT<func3, tag3, 0, (outs), (ins), asmstr, "">;
 
 //===----------------------------------------------------------------------===//
 // Instructions common
@@ -395,10 +395,8 @@ def MULH : ALU_rr<0b011, 0b100, 0, "mulh">;
 def MULHU : ALU_rr<0b011, 0b110, 0, "mulhu">;
 def MULI : ALU_ri<0b011, 0b000, "muli">;
 def MULHI : ALU_ri<0b011, 0b100, "mulhi">;
-//TODO:
-//mul.d, mulu.d(smul_lohi, umul_lohi)
-//def MULHUS : ALU_rr<0b011, 0b111, 0, "mulhus">;
-//def MULHUSI : ALU_ri<0b011, 0b110, "mulhusi">;
+def MULD : ALUd_rr<0b011, 0b011, 0, "mul.32">;
+def MULDU : ALUd_rr<0b011, 0b001, 0, "mulu.32">;
 
 //Bitmanipulation
 def REV : ALU_r<0b101, 0b011, 0, "rev">;
@@ -417,13 +415,11 @@ def SBFX : BFM_rii<0b101, 0b010, 1, "sbfx">;
 def MOVZ : CMOV_rr<0b100, 0b000, 0, "movz">;
 def MOVN : CMOV_rr<0b100, 0b001, 0, "movn">;
 
-//System Hint
-def NOP : HINT<0b000, "nop">;
-def WFI : HINT<0b001, "wfi">;
-
-//System Call
-def ECALL : FMT_HT<0b001, 1, 0, (outs), (ins), "ecall", "">,  Sched<[WriteBranch]>;
-def EBREAK : FMT_HT<0b001, 2, 0, (outs), (ins), "ebreak", "">, Sched<[WriteBranch]>;
+//System Ctl
+def NOP : HINT<0b000, 0b000, "nop">;
+def WFI : HINT<0b000, 0b001, "wfi">;
+def ECALL  : HINT<0b001, 1, "ecall">,  Sched<[WriteBranch]>;
+def EBREAK : HINT<0b001, 2, "ebreak">, Sched<[WriteBranch]>;
 
 def ADJCALLSTACKUP : Pseudo<(outs), (ins i16imm:$amt1, i16imm:$amt2),
                      "!ADJCALLSTACKUP", "$amt1",
@@ -700,15 +696,33 @@ def : Pat<(i16 (bswap (i16 IntRegs:$rs))), (ROLI IntRegs:$rs, 8)>;
 def zexti8 : ComplexPattern<i16, 1, "SelectZExtBits<8>">;
 def : Pat<(i16 (or (zexti8 (i16 IntRegs:$rs1)), (shl IntRegs:$rs2, (i16 8)))),
   (PACK IntRegs:$rs1, IntRegs:$rs2, 8)>;
-def : Pat<(i16 (sext_inreg IntRegs:$rs1, i8)), (SBFX IntRegs:$rs1, 0, 7)>; //sext.8 $rs1 = sbfx $rs1, 0, 7
+def : Pat<(i16 (sext_inreg IntRegs:$rs1, i8)), (SBFX IntRegs:$rs1, 0, 7)>;
 
 def : Pat<(i16 (and IntRegs:$rs1, (not IntRegs:$rs2))), (ANDN IntRegs:$rs1, IntRegs:$rs2)>;
 def : Pat<(i16 (or  IntRegs:$rs1, (not IntRegs:$rs2))), (ORN  IntRegs:$rs1, IntRegs:$rs2)>;
 def : Pat<(i16 (xor IntRegs:$rs1, (not IntRegs:$rs2))), (XNOR IntRegs:$rs1, IntRegs:$rs2)>;
 
 //===----------------------------------------------------------------------===//
+// v2i16 codegen patterns
+//===----------------------------------------------------------------------===//
+// build_vector
+def : Pat<(build_vector (i16 IntRegs:$rs1), (i16 IntRegs:$rs2)),
+          (INSERT_SUBREG
+            (INSERT_SUBREG (v2i16 (IMPLICIT_DEF)), (i16 IntRegs:$rs1), sub_even),
+            (i16 IntRegs:$rs2),
+            sub_odd)>;
+
+// extract_vector
+def : Pat<(extractelt (v2i16 IntPair:$rs), 0),
+          (i16 (EXTRACT_SUBREG IntPair:$rs, sub_even))>;
+def : Pat<(extractelt (v2i16 IntPair:$rs), 1),
+          (i16 (EXTRACT_SUBREG IntPair:$rs, sub_odd))>;
+
+//===----------------------------------------------------------------------===//
 // Special codegen patterns
 //===----------------------------------------------------------------------===//
+def : Pat<(debugtrap), (EBREAK)>;
+
 // Addressing modes. ref: SodiumComplexPattern.h
 def BaseAddr : ComplexPattern<iPTR, 1, "SelectBaseAddr">;
 def AddrConstant : ComplexPattern<iPTR, 2, "SelectAddrConstant">;
@@ -721,32 +735,30 @@ def AddLike: PatFrags<(ops node:$A, node:$B),
 def : Pat<(AddLike (i16 BaseAddr:$rb), simm13:$imm13),
           (ADDI (i16 BaseAddr:$rb), simm13:$imm13)>;
 
-multiclass LdPat<PatFrag LoadOp, SodiumInst Inst> {
-  def : Pat<(i16 (LoadOp BaseAddr:$rb)), (Inst BaseAddr:$rb, 0)>;
-  def : Pat<(i16 (LoadOp (AddrConstant IntRegs:$rb, simm13:$imm13))),
+multiclass LdPat<PatFrag LoadOp, SodiumInst Inst, ValueType Vt> {
+  def : Pat<(Vt (LoadOp BaseAddr:$rb)), (Inst BaseAddr:$rb, 0)>;
+  def : Pat<(Vt (LoadOp (AddrConstant IntRegs:$rb, simm13:$imm13))),
   (Inst IntRegs:$rb, simm13:$imm13)>;
-  def : Pat<(i16 (LoadOp (AddLike BaseAddr:$rb, simm13:$imm13))),
+  def : Pat<(Vt (LoadOp (AddLike BaseAddr:$rb, simm13:$imm13))),
   (Inst BaseAddr:$rb, simm13:$imm13)>;
 }
 
-multiclass StPat<PatFrag StoreOp, SodiumInst Inst> {
-  def : Pat<(StoreOp (i16 IntRegs:$rd), BaseAddr:$rb),
-  (Inst IntRegs:$rd, BaseAddr:$rb, 0)>;
-  def : Pat<(StoreOp (i16 IntRegs:$rd), (AddrConstant IntRegs:$rb, simm13:$imm13)),
-  (Inst IntRegs:$rd, IntRegs:$rb, simm13:$imm13)>;
-  def : Pat<(StoreOp (i16 IntRegs:$rd), (AddLike BaseAddr:$rb, simm13:$imm13)),
-  (Inst IntRegs:$rd, BaseAddr:$rb, simm13:$imm13)>;
+multiclass StPat<PatFrag StoreOp, SodiumInst Inst, RegisterClass RC, ValueType Vt> {
+  def : Pat<(StoreOp (Vt RC:$rd), BaseAddr:$rb),
+  (Inst RC:$rd, BaseAddr:$rb, 0)>;
+  def : Pat<(StoreOp (Vt RC:$rd), (AddrConstant IntRegs:$rb, simm13:$imm13)),
+  (Inst RC:$rd, IntRegs:$rb, simm13:$imm13)>;
+  def : Pat<(StoreOp (Vt RC:$rd), (AddLike BaseAddr:$rb, simm13:$imm13)),
+  (Inst RC:$rd, BaseAddr:$rb, simm13:$imm13)>;
 }
 
-defm : LdPat<load, LW>;
-defm : LdPat<sextloadi8, LB>;
-defm : LdPat<extloadi8, LBU>;
-defm : LdPat<zextloadi8, LBU>;
-defm : StPat<store, SW>;
-defm : StPat<truncstorei8, SB>;
+defm : LdPat<load, LW, i16>;
+defm : LdPat<sextloadi8, LB, i16>;
+defm : LdPat<extloadi8, LBU, i16>;
+defm : LdPat<zextloadi8, LBU, i16>;
+defm : StPat<store, SW, IntRegs, i16>;
+defm : StPat<truncstorei8, SB, IntRegs, i16>;
 
-//TODO: dual word load/store
-//def : LdPat<load, LD, i32>;
-//def : StPat<store, SD, GPR, i32>;
-
-def : Pat<(debugtrap), (EBREAK)>;
+// load store pairs
+defm : LdPat<load, LD, v2i16>;
+defm : StPat<store, SD, IntPair, v2i16>;
