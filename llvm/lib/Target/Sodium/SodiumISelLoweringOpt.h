@@ -185,3 +185,113 @@ static SDValue expandMULtoSHLADD(SDNode *N, TargetLowering::DAGCombinerInfo &DCI
   DCI.CombineTo(N, Res, false);
   return SDValue();
 }
+
+//===----------------------------------------------------------------------===//
+// DAGCombine
+//===----------------------------------------------------------------------===//
+static SDValue performADDCombine(SDNode *N, SelectionDAG &DAG) {
+  // fold add (shl x, c0), (shl y, c1) =>
+  //      SLLI (SHADD x, y, diff), c0, if c1-c0 within 1 to 8.
+  if (SDValue V = combineAddShlImm(N, DAG))
+    return V;
+  // fold add (xor (setcc X, Y), 1), -1 => neg (setcc X, Y).
+  if (SDValue V = combineAddOfBooleanXor(N, DAG))
+    return V;
+  return SDValue();
+}
+
+static SDValue performSUBCombine(SDNode *N, SelectionDAG &DAG) {
+  SDValue N0 = N->getOperand(0);
+  SDValue N1 = N->getOperand(1);
+  // fold sub 0, (setcc x, 0, setlt) => sra x, xlen - 1
+  if (isNullConstant(N0) && N1.getOpcode() == ISD::SETCC && N1.hasOneUse() &&
+      isNullConstant(N1.getOperand(1))) {
+    ISD::CondCode CCVal = cast<CondCodeSDNode>(N1.getOperand(2))->get();
+    if (CCVal == ISD::SETLT) {
+      EVT VT = N->getValueType(0);
+      SDLoc DL(N);
+      unsigned ShAmt = N0.getValueSizeInBits() - 1;
+      return DAG.getNode(ISD::SRA, DL, VT, N1.getOperand(0),
+                         DAG.getConstant(ShAmt, DL, VT));
+    }
+  }
+  return SDValue();
+}
+
+static SDValue performMULCombine(SDNode *N,
+                                 TargetLowering::DAGCombinerInfo &DCI) {
+  SDLoc DL(N);
+  ConstantSDNode *C = dyn_cast<ConstantSDNode>(N->getOperand(1));
+  if (!C) return SDValue();
+
+  SDValue X = N->getOperand(0);
+  //fold mul x, C => and/sub (shl x, ShiftAmt), (-)x
+  if (SDValue V = expandMULtoSHLADD(N, DCI, X, C))
+    return V;
+
+  return SDValue();
+}
+
+static SDValue performLogicCombine(SDNode *N,
+                                   TargetLowering::DAGCombinerInfo &DCI) {
+  SelectionDAG &DAG = DCI.DAG;
+  if (DCI.isAfterLegalizeDAG()) {
+    // fold and (setcc c, 0, ne), (i1)f => select (c, 0, ne), f, 0 => f = (movz c, zero)
+    //      and (setcc c, 0, eq), (i1)f => select (c, 0, eq), f, 0 => f = (movn c, zero)
+    if (SDValue V = combineAndSetCCToCMOV(N, DAG))
+      return V;
+    if (SDValue V = combineDeMorganOfBoolean(N, DAG))
+      return V;
+  }
+  return SDValue();
+}
+
+static SDValue performXORCombine(SDNode *N, SelectionDAG &DAG) {
+  SDValue N0 = N->getOperand(0);
+  SDValue N1 = N->getOperand(1);
+  // fold xor (sll 1, x), -1 => rol ~1, x
+  if (N0.getOpcode() == ISD::SHL &&
+      isAllOnesConstant(N1) && isOneConstant(N0.getOperand(0))) {
+    SDLoc DL(N);
+    EVT VT = N->getValueType(0);
+    return DAG.getNode(ISD::ROTL, DL, VT,
+                       DAG.getConstant(~1, DL, VT), N0.getOperand(1));
+  }
+  // fold xor (setcc constant, y, setlt), 1 => setcc y, constant + 1, setlt
+  if (N0.hasOneUse() && N0.getOpcode() == ISD::SETCC && isOneConstant(N1)) {
+    auto *ConstN00 = dyn_cast<ConstantSDNode>(N0.getOperand(0));
+    ISD::CondCode CC = cast<CondCodeSDNode>(N0.getOperand(2))->get();
+    if (ConstN00 && CC == ISD::SETLT) {
+      EVT VT = N0.getValueType();
+      SDLoc DL(N0);
+      const APInt &Imm = ConstN00->getAPIntValue();
+      if ((Imm + 1).isSignedIntN(13))
+        return DAG.getSetCC(DL, VT, N0.getOperand(1),
+                            DAG.getConstant(Imm + 1, DL, VT), CC);
+    }
+  }
+  return SDValue();
+}
+
+// Try to combine two adjacent loads/stores to a single pair instruction.
+static SDValue performMemPairCombine(SDNode *N,
+                                     TargetLowering::DAGCombinerInfo &DCI) {
+  //TODO
+  return SDValue();
+}
+
+// Perform common combines for BR_CC and SELECT_CC condtions.
+static bool performCCCombine(SDValue &LHS, SDValue &RHS, SDValue &CC,
+                             const SDLoc &DL, SelectionDAG &DAG) {
+  ISD::CondCode CCVal = cast<CondCodeSDNode>(CC)->get();
+  // fold setlt (sra X, N), 0 => setlt X, 0 and
+  //      setge (sra X, N), 0 => setge X, 0
+  if (auto *RHSConst = dyn_cast<ConstantSDNode>(RHS.getNode())) {
+    if ((CCVal == ISD::SETGE || CCVal == ISD::SETLT) &&
+        LHS.getOpcode() == ISD::SRA && RHSConst->isZero()) {
+      LHS = LHS.getOperand(0);
+      return true;
+    }
+  }
+  return false;
+}

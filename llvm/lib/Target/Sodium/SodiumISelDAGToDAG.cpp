@@ -20,25 +20,6 @@ using namespace llvm;
 #define DEBUG_TYPE "sodium-isel"
 #define PASS_NAME "Sodium DAG->DAG Pattern Instruction Selection"
 
-static SDValue SelectImm(SelectionDAG *CurDAG, const SDLoc &DL, const MVT VT,
-                         int64_t Imm, const SodiumSubtarget &Subtarget) {
-  if (isInt<13>(Imm)) {
-    SDValue SDImm = CurDAG->getTargetConstant(Imm, DL, VT);
-    return SDValue(CurDAG->getMachineNode(Sodium::ADDI, DL, VT,
-                                         CurDAG->getRegister(Sodium::X0, VT), SDImm), 0);
-  } else {
-    int64_t Hi19 = ((Imm + 0x1000) >> 13) & (Subtarget.is32Bit ? 0x7FFFF : 0x7);
-    int64_t Lo13 = SignExtend32<13>(Imm);
-    SDValue LuiOp = SDValue(CurDAG->getMachineNode(Sodium::LUI, DL, VT,
-                                                  CurDAG->getTargetConstant(Hi19, DL, VT)), 0);
-    if (Lo13 == 0) return LuiOp;
-    SDValue AddiOp = SDValue(CurDAG->getMachineNode(Sodium::ADDI, DL, VT, LuiOp,
-                                                   CurDAG->getTargetConstant(Lo13, DL, VT)), 0);
-    return AddiOp;
-  }
-  return SDValue();
-}
-
 bool SodiumDAGToDAGISel::SelectInlineAsmMemoryOperand(const SDValue &Op, unsigned ConstraintID,
                                                       std::vector<SDValue> &OutOps) {
   // Always produce a register and immediate operand, as expected by
@@ -50,7 +31,7 @@ bool SodiumDAGToDAGISel::SelectInlineAsmMemoryOperand(const SDValue &Op, unsigne
   default:
     report_fatal_error("Unexpected asm memory constraint " +
                        InlineAsm::getMemConstraintName(ConstraintID));
-  // Reg+simm13 addressing.
+  // reg+simm13 addressing.
   case InlineAsm::Constraint_o:
   case InlineAsm::Constraint_m:
     if (CurDAG->isBaseWithConstantOffset(Op)) {
@@ -70,6 +51,7 @@ bool SodiumDAGToDAGISel::SelectInlineAsmMemoryOperand(const SDValue &Op, unsigne
   return false;
 }
 
+// Select Methods
 #include "SodiumISelDAGToDAGOpt.h"
 
 #define SelectSodium(Opc) \
@@ -80,22 +62,12 @@ void SodiumDAGToDAGISel::Select(SDNode *Node) {
     Node->setNodeId(-1);
     return;
   }
+
   SDLoc DL(Node);
   MVT VT = Node->getSimpleValueType(0);
+
   switch (Node->getOpcode()) {
     default: break;
-  case ISD::Constant: {
-    auto *ConstNode = cast<ConstantSDNode>(Node);
-    if (ConstNode->isZero()) {
-      SDValue New =
-          CurDAG->getCopyFromReg(CurDAG->getEntryNode(), DL, Sodium::X0, VT);
-      ReplaceNode(Node, New.getNode());
-      return;
-    }
-    int64_t Imm = ConstNode->getSExtValue();
-    ReplaceNode(Node, SelectImm(CurDAG, DL, VT, Imm, *Subtarget).getNode());
-    return;
-  }
   case ISD::FrameIndex: {
     SDValue Imm = CurDAG->getTargetConstant(0, DL, MVT::i32);
     int FI = cast<FrameIndexSDNode>(Node)->getIndex();
@@ -126,14 +98,6 @@ void SodiumDAGToDAGISel::Select(SDNode *Node) {
   case ISD::SIGN_EXTEND_INREG:
     if (tryBitfieldOpfromSExtInReg(CurDAG, Node)) return;
     break;
-  case SodiumISD::Mul32: {
-    SelectSodium(Sodium::MULD);
-    return;
-  }
-  case SodiumISD::Mulu32: {
-    SelectSodium(Sodium::MULDU);
-    return;
-  }
   }
   // Select the default instruction.
   SelectCode(Node);

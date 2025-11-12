@@ -33,6 +33,9 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/PatternMatch.h"
+#include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/Intrinsics.h"
+#include "llvm/IR/IntrinsicsSodium.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -50,7 +53,6 @@ SodiumTargetLowering::SodiumTargetLowering(const TargetMachine &TM,
                                            const SodiumSubtarget &STI)
     : TargetLowering(TM), Subtarget(STI) {
   addRegisterClass(MVT::i16, &Sodium::IntRegsRegClass);
-  computeRegisterProperties(Subtarget.getRegisterInfo());
 
   setMinFunctionAlignment(Align(2));
   setStackPointerRegisterToSaveRestore(Sodium::X4);
@@ -70,10 +72,10 @@ SodiumTargetLowering::SodiumTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8, Expand);
 
   // Plenty of Settings.
+  setTargetDAGCombine(ISD_COMBINE);
   setOperationAction(ISD_LEGAL,  MVT::i16, Legal);
   setOperationAction(ISD_EXPAND, MVT::i16, Expand);
   setOperationAction(ISD_CUSTOM, MVT::i16, Custom);
-  setTargetDAGCombine(ISD_COMBINE);
 
   // Expand jump table branches as address arithmetic followed by an
   // indirect jump.
@@ -88,8 +90,6 @@ SodiumTargetLowering::SodiumTargetLowering(const TargetMachine &TM,
 
   // Stack alloca.
   setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i16, Expand);
-
-  setOperationAction(ISD::PREFETCH, MVT::Other, Legal);
   setOperationAction({ISD::TRAP, ISD::DEBUGTRAP}, MVT::Other, Legal);
 
   // derived from Sparc Target.
@@ -102,7 +102,6 @@ SodiumTargetLowering::SodiumTargetLowering(const TargetMachine &TM,
   for (unsigned Op = 0; Op < ISD::BUILTIN_OP_END; ++Op) {
     setOperationAction(Op, MVT::v2i16, Expand);
   }
-
   // Truncating/extending stores/loads are also not supported.
   for (MVT VT : MVT::integer_fixedlen_vector_valuetypes()) {
     setLoadExtAction(ISD::SEXTLOAD, VT, MVT::v2i16, Expand);
@@ -118,18 +117,20 @@ SodiumTargetLowering::SodiumTargetLowering(const TargetMachine &TM,
   }
   // However, load and store *are* legal.
   setOperationAction({ISD::EXTRACT_VECTOR_ELT, ISD::BUILD_VECTOR,
-                      ISD::LOAD, ISD::STORE}, MVT::v2i16, Legal);
+    ISD::LOAD, ISD::STORE}, MVT::v2i16, Legal);
 
   // And we need to promote i32 loads/stores into vector load/store
-  setOperationAction(ISD::LOAD, MVT::i32, Custom);
-  setOperationAction(ISD::STORE, MVT::i32, Custom);
+  setOperationAction({ISD::LOAD, ISD::STORE}, MVT::i32, Custom);
 
   // Sadly, this doesn't work:
   //AddPromotedToType(ISD::LOAD, MVT::i32, MVT::v2i16);
   //AddPromotedToType(ISD::STORE, MVT::i32, MVT::v2i16);
 
-  setOperationAction(ISD::ADD, MVT::i32, Custom);
-  setOperationAction(ISD::SUB, MVT::i32, Custom);
+  //TODO
+  //setOperationAction({ISD::ADD, ISD::SUB, ISD::MUL}, MVT::i32, Custom);
+
+  // setup after all addRegisterClass executed
+  computeRegisterProperties(Subtarget.getRegisterInfo());
 }
 
 const char *SodiumTargetLowering::getTargetNodeName(unsigned Opcode) const {
@@ -140,15 +141,13 @@ const char *SodiumTargetLowering::getTargetNodeName(unsigned Opcode) const {
   switch ((SodiumISD::NodeType)Opcode) {
   case SodiumISD::FIRST_NUMBER:
     break;
-    NODE_NAME_CASE(Hi)
-    NODE_NAME_CASE(AddLo)
+    NODE_NAME_CASE(LI)
+    NODE_NAME_CASE(LA)
     NODE_NAME_CASE(Call)
     NODE_NAME_CASE(Tail)
     NODE_NAME_CASE(Ret)
     NODE_NAME_CASE(ERet)
-    NODE_NAME_CASE(LLA)
-    NODE_NAME_CASE(Mul32)
-    NODE_NAME_CASE(Mulu32)
+    NODE_NAME_CASE(TBE)
   }
   // clang-format on
   return nullptr;
@@ -157,6 +156,10 @@ const char *SodiumTargetLowering::getTargetNodeName(unsigned Opcode) const {
 
 #include "SodiumGenCallingConv.inc"
 
+// Lower Methods
+#include "SodiumLowerFunc.h"
+
+//illegal ins expand
 SDValue
 SodiumTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   switch (Op.getOpcode()) {
@@ -179,14 +182,15 @@ SodiumTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   case ISD::UMUL_LOHI:
     return LowerMUL_LOHI(Op, DAG, false);
   case ISD::STORE: {
-    // Custom handling for i32 stores: turn it into a bitcast and a
-    // v2i16 store.
-    SDLoc DL(Op);
-    StoreSDNode *St = cast<StoreSDNode>(Op.getNode());
+    SDNode *N = Op.getNode();
+    SDLoc DL(N);
+    StoreSDNode *St = cast<StoreSDNode>(N);
     if (St->getMemoryVT() != MVT::i32)
       break;
 
-    SDValue Op0 = DAG.getNode(ISD::BITCAST, DL, MVT::v2i16, St->getValue());
+    // Custom handling for i32 stores: turn it into a bitcast and a
+    // v2i16 store.
+    SDValue Op0 = DAG.getBitcast(MVT::v2i16, St->getValue());
     SDValue Chain = DAG.getStore(St->getChain(), DL, Op0,
                                  St->getBasePtr(), St->getPointerInfo(),
                                  St->getOriginalAlign(), St->getMemOperand()->getFlags(),
@@ -197,6 +201,9 @@ SodiumTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   return SDValue();
 }
 
+#define GETBITS(x, n, m) ((x >> n) & ((1 << (m - n + 1)) - 1))
+
+//illegal outs expand
 void SodiumTargetLowering::ReplaceNodeResults(SDNode *N,
                                               SmallVectorImpl<SDValue>& Results,
                                               SelectionDAG &DAG) const {
@@ -205,46 +212,31 @@ void SodiumTargetLowering::ReplaceNodeResults(SDNode *N,
   default:
     llvm_unreachable("Do not know how to custom type legalize this operation!");
   case ISD::LOAD: {
-    // Custom handling only for i32: turn i32 load into a v2i16 load,
-    // and a bitcast.
     LoadSDNode *Ld = cast<LoadSDNode>(N);
     if (Ld->getValueType(0) != MVT::i32 || Ld->getMemoryVT() != MVT::i32)
       break;
 
+    // Custom handling only for i32: turn i32 load into a v2i16 load,
+    // and a bitcast.
     SDValue Op0 = DAG.getExtLoad(Ld->getExtensionType(), DL, MVT::v2i16, Ld->getChain(),
                                  Ld->getBasePtr(), Ld->getPointerInfo(), MVT::v2i16,
                                  Ld->getOriginalAlign(), Ld->getMemOperand()->getFlags(),
                                  Ld->getAAInfo());
-    SDValue Chain = DAG.getNode(ISD::BITCAST, DL, MVT::i32, Op0);
+    SDValue Chain = DAG.getBitcast(MVT::i32, Op0);
     Results.push_back(Chain);
     Results.push_back(Op0.getValue(1));
     break;
   }
+  case ISD::ADD:
+  case ISD::SUB: {
+    //TODO
+    break;
   }
-}
-
-/*
-// Expand i32 add/sub(i32, i32)
-SDValue SodiumTargetLowering::LowerAddSub(SDValue Op, SelectionDAG &DAG, NodeType Opc) const {
-  SDLoc DL(Op);
-  SDNode *N = Op.getNode();
-  if (N->getValueType() != MVT::i32) return SDValue();
-  //Check if extended from i16, which doens't need bitcast
-  SDValue Op0 = DAG.getNode(ISD::BITCAST, DL, MVT::v2i16, N->getOperand(0));
-  SDValue Op0 = DAG.getNode(ISD::BITCAST, DL, MVT::v2i16, N->getOperand(1));
-  return Chain;
-}
-*/
-
-SDValue SodiumTargetLowering::LowerMUL_LOHI(SDValue Op, SelectionDAG &DAG, bool isSigned) const {
-  SDLoc DL(Op);
-  SDNode *N = Op.getNode();
-  SDValue Op0 = DAG.getNode(isSigned ? SodiumISD::Mul32 : SodiumISD::Mulu32,
-                            DL, MVT::v2i16,
-                            N->getOperand(0),
-                            N->getOperand(1));
-  SDValue Chain = DAG.getNode(ISD::BITCAST, DL, MVT::i32, Op0);
-  return Chain;
+  case ISD::MUL: {
+    //TODO
+    break;
+  }
+  }
 }
 
 template<typename T> void
@@ -346,268 +338,8 @@ const {
   return DAG.getNode(RetOpc, DL, MVT::Other, Ops);
 }
 
-static SDValue getTargetNode(GlobalAddressSDNode *N, const SDLoc &DL, EVT Ty,
-                             SelectionDAG &DAG, unsigned Flags) {
-  return DAG.getTargetGlobalAddress(N->getGlobal(), DL, Ty, 0, Flags);
-}
-
-static SDValue getTargetNode(BlockAddressSDNode *N, const SDLoc &DL, EVT Ty,
-                             SelectionDAG &DAG, unsigned Flags) {
-  return DAG.getTargetBlockAddress(N->getBlockAddress(), Ty, N->getOffset(),
-                                   Flags);
-}
-
-static SDValue getTargetNode(ConstantPoolSDNode *N, const SDLoc &DL, EVT Ty,
-                             SelectionDAG &DAG, unsigned Flags) {
-  return DAG.getTargetConstantPool(N->getConstVal(), Ty, N->getAlign(),
-                                   N->getOffset(), Flags);
-}
-
-static SDValue getTargetNode(JumpTableSDNode *N, const SDLoc &DL, EVT Ty,
-                             SelectionDAG &DAG, unsigned Flags) {
-  return DAG.getTargetJumpTable(N->getIndex(), Ty, Flags);
-}
-
-template <class NodeTy>
-SDValue SodiumTargetLowering::getAddr(NodeTy *N, SelectionDAG &DAG,
-                                      bool IsLocal) const {
-  SDLoc DL(N);
-  EVT Ty = getPointerTy(DAG.getDataLayout());
-  SDValue Addr = getTargetNode(N, DL, Ty, DAG, 0);
-
-  if (isPositionIndependent()) {
-    // This generates the pattern (PseudoLLA sym), which expands to
-    //   addi (auipc %pcrel_hi(sym)), %pcrel_lo(sym).
-    return DAG.getNode(SodiumISD::LLA, DL, Ty, Addr);
-  }
-
-  //NonPIC Address
-  SDValue AddrHi = getTargetNode(N, DL, Ty, DAG, SODIUMII::MO_HI);
-  SDValue AddrLo = getTargetNode(N, DL, Ty, DAG, SODIUMII::MO_LO);
-  return DAG.getNode(SodiumISD::AddLo, DL, Ty,
-                     DAG.getNode(SodiumISD::Hi, DL, Ty, AddrHi),
-                     AddrLo);
-}
-
-template<typename T>
-SDValue SodiumTargetLowering::LowerSimpleAddress(SDValue Op,
-                                                 SelectionDAG &DAG) const {
-  T *N = cast<T>(Op);
-  return getAddr(N, DAG);
-}
-
-SDValue SodiumTargetLowering::LowerGlobalAddress(SDValue Op,
-                                                 SelectionDAG &DAG) const {
-  GlobalAddressSDNode *N = cast<GlobalAddressSDNode>(Op);
-  assert(N->getOffset() == 0 && "unexpected offset in global node");
-  return getAddr(N, DAG, N->getGlobal()->isDSOLocal());
-}
-
-SDValue SodiumTargetLowering::LowerBR_JT(SDValue Op, SelectionDAG &DAG) const {
-  SDValue Chain = Op.getOperand(0);
-  SDValue Table = Op.getOperand(1);
-  SDValue Index = Op.getOperand(2);
-  SDLoc DL(Op);
-
-  EVT PTy = getPointerTy(DAG.getDataLayout());
-
-  JumpTableSDNode *JT = cast<JumpTableSDNode>(Table);
-  SDValue JTI = DAG.getTargetJumpTable(JT->getIndex(), PTy);
-
-  Table = DAG.getNode(SodiumISD::LLA, DL, MVT::i16, JTI);
-  Index = DAG.getNode(ISD::SHL, DL, PTy, Index, DAG.getConstant(2, DL, PTy));
-
-  SDValue Addr = DAG.getNode(ISD::ADD, DL, PTy, Table, Index);
-  if (isPositionIndependent()) {
-    Addr = DAG.getLoad((EVT)MVT::i16, DL, Chain, Addr,
-                    MachinePointerInfo::getJumpTable(DAG.getMachineFunction()));
-    Chain = Addr.getValue(1);
-    Addr = DAG.getNode(ISD::ADD, DL, PTy, Addr, Table);
-  } else {
-    Addr = DAG.getLoad(PTy, DL, Chain, Addr,
-                    MachinePointerInfo::getJumpTable(DAG.getMachineFunction()));
-    Chain = Addr.getValue(1);
-  }
-  return DAG.getNode(ISD::BRIND, DL, MVT::Other, Chain, Addr);
-}
-
-SDValue SodiumTargetLowering::LowerVASTART(SDValue Op, SelectionDAG &DAG) const {
-  MachineFunction &MF = DAG.getMachineFunction();
-  SodiumMachineFunctionInfo *FuncInfo = MF.getInfo<SodiumMachineFunctionInfo>();
-
-  SDLoc DL(Op);
-  SDValue FI = DAG.getFrameIndex(FuncInfo->getVarArgsFrameIndex(),
-                                 getPointerTy(MF.getDataLayout()));
-
-  // vastart just stores the address of the VarArgsFrameIndex slot into the
-  // memory location argument.
-  const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
-  return DAG.getStore(Op.getOperand(0), DL, FI, Op.getOperand(1),
-                      MachinePointerInfo(SV));
-}
-
-static std::optional<bool> matchSetCC(SDValue LHS, SDValue RHS,
-                                      ISD::CondCode CC, SDValue Val) {
-  assert(Val->getOpcode() == ISD::SETCC);
-  SDValue LHS2 = Val.getOperand(0);
-  SDValue RHS2 = Val.getOperand(1);
-  ISD::CondCode CC2 = cast<CondCodeSDNode>(Val.getOperand(2))->get();
-
-  if (LHS == LHS2 && RHS == RHS2) {
-    if (CC == CC2)
-      return true;
-    if (CC == ISD::getSetCCInverse(CC2, LHS2.getValueType()))
-      return false;
-  } else if (LHS == RHS2 && RHS == LHS2) {
-    CC2 = ISD::getSetCCSwappedOperands(CC2);
-    if (CC == CC2)
-      return true;
-    if (CC == ISD::getSetCCInverse(CC2, LHS2.getValueType()))
-      return false;
-  }
-  return std::nullopt;
-}
-
-SDValue SodiumTargetLowering::LowerSelect(SDValue Op, SelectionDAG &DAG) const {
-  SDNode *N = Op.getNode();
-  SDValue CondV = N->getOperand(0);
-  SDValue TrueV = N->getOperand(1);
-  SDValue FalseV = N->getOperand(2);
-  MVT VT = N->getSimpleValueType(0);
-
-  // Try to fold (select (setcc lhs, rhs, cc), truev, falsev) into bitwise ops
-  // when both truev and falsev are also setcc.
-  SDLoc DL(N);
-  if (CondV.getOpcode() == ISD::SETCC && TrueV.getOpcode() == ISD::SETCC &&
-      FalseV.getOpcode() == ISD::SETCC) {
-    SDValue LHS = CondV.getOperand(0);
-    SDValue RHS = CondV.getOperand(1);
-    ISD::CondCode CC = cast<CondCodeSDNode>(CondV.getOperand(2))->get();
-
-    // (select x, x, y) -> x | y
-    // (select !x, x, y) -> x & y
-    if (std::optional<bool> MatchResult = matchSetCC(LHS, RHS, CC, TrueV)) {
-      return DAG.getNode(*MatchResult ? ISD::OR : ISD::AND, DL, VT, TrueV,
-                         DAG.getFreeze(FalseV));
-    }
-    // (select x, y, x) -> x & y
-    // (select !x, y, x) -> x | y
-    if (std::optional<bool> MatchResult = matchSetCC(LHS, RHS, CC, FalseV)) {
-      return DAG.getNode(*MatchResult ? ISD::AND : ISD::OR, DL, VT,
-                         DAG.getFreeze(TrueV), FalseV);
-    }
-  }
-  return SDValue();
-}
-
+// DAGCombine Methods
 #include "SodiumISelLoweringOpt.h"
-
-static SDValue performADDCombine(SDNode *N, SelectionDAG &DAG) {
-  // fold add (shl x, c0), (shl y, c1) =>
-  //      SLLI (SHADD x, y, diff), c0, if c1-c0 within 1 to 8.
-  if (SDValue V = combineAddShlImm(N, DAG))
-    return V;
-  // fold add (xor (setcc X, Y), 1), -1 => neg (setcc X, Y).
-  if (SDValue V = combineAddOfBooleanXor(N, DAG))
-    return V;
-  return SDValue();
-}
-
-static SDValue performSUBCombine(SDNode *N, SelectionDAG &DAG) {
-  SDValue N0 = N->getOperand(0);
-  SDValue N1 = N->getOperand(1);
-  // fold sub 0, (setcc x, 0, setlt) => sra x, xlen - 1
-  if (isNullConstant(N0) && N1.getOpcode() == ISD::SETCC && N1.hasOneUse() &&
-      isNullConstant(N1.getOperand(1))) {
-    ISD::CondCode CCVal = cast<CondCodeSDNode>(N1.getOperand(2))->get();
-    if (CCVal == ISD::SETLT) {
-      EVT VT = N->getValueType(0);
-      SDLoc DL(N);
-      unsigned ShAmt = N0.getValueSizeInBits() - 1;
-      return DAG.getNode(ISD::SRA, DL, VT, N1.getOperand(0),
-                         DAG.getConstant(ShAmt, DL, VT));
-    }
-  }
-  return SDValue();
-}
-
-static SDValue performMULCombine(SDNode *N,
-                                 TargetLowering::DAGCombinerInfo &DCI) {
-  SDLoc DL(N);
-  ConstantSDNode *C = dyn_cast<ConstantSDNode>(N->getOperand(1));
-  if (!C) return SDValue();
-
-  SDValue X = N->getOperand(0);
-  //fold mul x, C => and/sub (shl x, ShiftAmt), (-)x
-  if (SDValue V = expandMULtoSHLADD(N, DCI, X, C))
-    return V;
-
-  return SDValue();
-}
-
-static SDValue performLogicCombine(SDNode *N,
-                                   TargetLowering::DAGCombinerInfo &DCI) {
-  SelectionDAG &DAG = DCI.DAG;
-  if (DCI.isAfterLegalizeDAG()) {
-    // fold and (setcc c, 0, ne), (i1)f => select (c, 0, ne), f, 0 => f = (movz c, zero)
-    //      and (setcc c, 0, eq), (i1)f => select (c, 0, eq), f, 0 => f = (movn c, zero)
-    if (SDValue V = combineAndSetCCToCMOV(N, DAG))
-      return V;
-    if (SDValue V = combineDeMorganOfBoolean(N, DAG))
-      return V;
-  }
-  return SDValue();
-}
-
-static SDValue performXORCombine(SDNode *N, SelectionDAG &DAG) {
-  SDValue N0 = N->getOperand(0);
-  SDValue N1 = N->getOperand(1);
-  // fold xor (sll 1, x), -1 => rol ~1, x
-  if (N0.getOpcode() == ISD::SHL &&
-      isAllOnesConstant(N1) && isOneConstant(N0.getOperand(0))) {
-    SDLoc DL(N);
-    EVT VT = N->getValueType(0);
-    return DAG.getNode(ISD::ROTL, DL, VT,
-                       DAG.getConstant(~1, DL, VT), N0.getOperand(1));
-  }
-  // fold xor (setcc constant, y, setlt), 1 => setcc y, constant + 1, setlt
-  if (N0.hasOneUse() && N0.getOpcode() == ISD::SETCC && isOneConstant(N1)) {
-    auto *ConstN00 = dyn_cast<ConstantSDNode>(N0.getOperand(0));
-    ISD::CondCode CC = cast<CondCodeSDNode>(N0.getOperand(2))->get();
-    if (ConstN00 && CC == ISD::SETLT) {
-      EVT VT = N0.getValueType();
-      SDLoc DL(N0);
-      const APInt &Imm = ConstN00->getAPIntValue();
-      if ((Imm + 1).isSignedIntN(13))
-        return DAG.getSetCC(DL, VT, N0.getOperand(1),
-                            DAG.getConstant(Imm + 1, DL, VT), CC);
-    }
-  }
-  return SDValue();
-}
-
-// Try to combine two adjacent loads/stores to a single pair instruction.
-static SDValue performMemPairCombine(SDNode *N,
-                                     TargetLowering::DAGCombinerInfo &DCI) {
-  //TODO
-  return SDValue();
-}
-
-// Perform common combines for BR_CC and SELECT_CC condtions.
-static bool performCCCombine(SDValue &LHS, SDValue &RHS, SDValue &CC,
-                             const SDLoc &DL, SelectionDAG &DAG) {
-  ISD::CondCode CCVal = cast<CondCodeSDNode>(CC)->get();
-  // fold setlt (sra X, N), 0 => setlt X, 0 and
-  //      setge (sra X, N), 0 => setge X, 0
-  if (auto *RHSConst = dyn_cast<ConstantSDNode>(RHS.getNode())) {
-    if ((CCVal == ISD::SETGE || CCVal == ISD::SETLT) &&
-        LHS.getOpcode() == ISD::SRA && RHSConst->isZero()) {
-      LHS = LHS.getOperand(0);
-      return true;
-    }
-  }
-  return false;
-}
 
 SDValue SodiumTargetLowering::PerformDAGCombine(SDNode *N,
                                                 DAGCombinerInfo &DCI) const {
@@ -629,6 +361,16 @@ SDValue SodiumTargetLowering::PerformDAGCombine(SDNode *N,
   case ISD::LOAD:
   case ISD::STORE:
     return performMemPairCombine(N, DCI);
+  case ISD::BR_CC: {
+    SDLoc DL(N);
+    SDValue LHS = N->getOperand(1);
+    SDValue RHS = N->getOperand(2);
+    SDValue CC = N->getOperand(3);
+    if (performCCCombine(LHS, RHS, CC, DL, DAG))
+      return DAG.getNode(ISD::BR_CC, DL, N->getValueType(0),
+                         N->getOperand(0), LHS, RHS, CC, N->getOperand(4));
+    return SDValue();
+  }
   case ISD::SELECT_CC: {
     SDLoc DL(N);
     SDValue LHS = N->getOperand(0);
@@ -639,16 +381,6 @@ SDValue SodiumTargetLowering::PerformDAGCombine(SDNode *N,
     if (performCCCombine(LHS, RHS, CC, DL, DAG))
       return DAG.getNode(ISD::SELECT_CC, DL, N->getValueType(0),
                          {LHS, RHS, CC, TrueV, FalseV});
-    return SDValue();
-  }
-  case ISD::BR_CC: {
-    SDLoc DL(N);
-    SDValue LHS = N->getOperand(1);
-    SDValue RHS = N->getOperand(2);
-    SDValue CC = N->getOperand(3);
-    if (performCCCombine(LHS, RHS, CC, DL, DAG))
-      return DAG.getNode(ISD::BR_CC, DL, N->getValueType(0),
-                         N->getOperand(0), LHS, RHS, CC, N->getOperand(4));
     return SDValue();
   }
   }
@@ -700,6 +432,7 @@ SodiumTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI
   // official names. However, other frontends like `rustc` do not. This allows
   // users of these frontends to use the ABI names for registers in LLVM-style
   // register constraints.
+  //TODO
 
   std::pair<Register, const TargetRegisterClass *> Res =
       TargetLowering::getRegForInlineAsmConstraint(TRI, Constraint, VT);

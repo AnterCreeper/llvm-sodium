@@ -53,6 +53,15 @@ StringRef SodiumMCExpr::getVariantKindName(VariantKind Kind) {
   return "";
 }
 
+SodiumMCExpr::VariantKind SodiumMCExpr::getVariantKindForName(StringRef name) {
+  return StringSwitch<SodiumMCExpr::VariantKind>(name)
+  .Case("lo", VK_SODIUM_LO)
+  .Case("hi", VK_SODIUM_HI)
+  .Case("pcrel_lo", VK_SODIUM_PCREL_LO)
+  .Case("pcrel_hi", VK_SODIUM_PCREL_HI)
+  .Default(VK_SODIUM_Invalid);
+}
+
 void SodiumMCExpr::printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const {
   VariantKind Kind = getKind();
   bool HasVariant = ((Kind != VK_SODIUM_None) && (Kind != VK_SODIUM_CALL));
@@ -61,6 +70,33 @@ void SodiumMCExpr::printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const {
   Expr->print(OS, MAI);
   if (HasVariant)
     OS << ')';
+}
+
+#define GETBITS(x, n, m) ((x >> n) & ((1 << (m - n + 1)) - 1))
+
+bool SodiumMCExpr::evaluateAsConstant(int64_t &Res) const {
+  MCValue Value;
+
+  if (Kind == VK_SODIUM_CALL ||
+      Kind == VK_SODIUM_PCREL_LO || Kind == VK_SODIUM_PCREL_HI)
+    return false;
+
+  if (!getSubExpr()->evaluateAsRelocatable(Value, nullptr, nullptr))
+    return false;
+
+  if (!Value.isAbsolute())
+    return false;
+
+  int64_t Imm = Value.getConstant();
+  switch (Kind) {
+  default:
+    llvm_unreachable("Invalid kind");
+  case VK_SODIUM_LO:
+    Res = GETBITS(Imm, 0,  15);
+  case VK_SODIUM_HI:
+    Res = GETBITS(Imm, 16, 31);
+  }
+  return true;
 }
 
 bool SodiumMCExpr::evaluateAsRelocatableImpl(MCValue &Res,

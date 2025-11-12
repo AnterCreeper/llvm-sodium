@@ -25,8 +25,8 @@ public:
   enum VariantKind {
     VK_SODIUM_None,
     VK_SODIUM_LO,
-    VK_SODIUM_PCREL_LO,
     VK_SODIUM_HI,
+    VK_SODIUM_PCREL_LO,
     VK_SODIUM_PCREL_HI,
     VK_SODIUM_CALL,
     VK_SODIUM_Invalid // Must be the last item
@@ -54,14 +54,16 @@ public:
   MCFragment *findAssociatedFragment() const override {
     return getSubExpr()->findAssociatedFragment();
   }
+
+  bool evaluateAsConstant(int64_t &Res) const;
   bool evaluateAsRelocatableImpl(MCValue &Res, const MCAsmLayout *Layout,
                                  const MCFixup *Fixup) const override;
 
   // There are no TLS SodiumMCExprs at the moment.
   void fixELFSymbolsInTLSFixups(MCAssembler &Asm) const override {};
 
-private:
   static StringRef getVariantKindName(VariantKind Kind);
+  static VariantKind getVariantKindForName(StringRef name);
 
 };
 

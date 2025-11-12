@@ -378,8 +378,8 @@ namespace clang {
       {ARM::LastTSBuiltin, AArch64::LastTSBuiltin, BPF::LastTSBuiltin,
        PPC::LastTSBuiltin, NVPTX::LastTSBuiltin, AMDGPU::LastTSBuiltin,
        X86::LastTSBuiltin, VE::LastTSBuiltin, RISCV::LastTSBuiltin,
-       Hexagon::LastTSBuiltin, Mips::LastTSBuiltin, XCore::LastTSBuiltin,
-       SystemZ::LastTSBuiltin, WebAssembly::LastTSBuiltin});
+       Sodium::LastTSBuiltin, Hexagon::LastTSBuiltin, Mips::LastTSBuiltin,
+       XCore::LastTSBuiltin, SystemZ::LastTSBuiltin, WebAssembly::LastTSBuiltin});
 
 } // end namespace clang.
 

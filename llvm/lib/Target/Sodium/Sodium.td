@@ -17,6 +17,9 @@ def IsSodium32 : Predicate<"Subtarget->is32Bit">,
                  AssemblerPredicate<(all_of Feature32Bit),
                  "Sodium32 Base Instruction Set">;
 
+def FeatureRelax
+  : SubtargetFeature<"relax", "EnableLinkerRelax", "true", "Enable Linker relaxation.">;
+
 defvar Sodium16 = DefaultMode;
 def Sodium32 : HwMode<"+32bit", [IsSodium32]>;
 
@@ -36,7 +39,8 @@ def SodiumInstrInfo : InstrInfo;
 def : ProcessorModel<"generic", SodiumGenericModel, []>;
 
 def SodiumAsmParser : AsmParser {
-  bit ShouldEmitMatchRegisterName = 0;
+  let ShouldEmitMatchRegisterAltName = 1;
+  let AllowDuplicateRegisterNames = 1;
 }
 
 def SodiumAsmParserVariant : AsmParserVariant {

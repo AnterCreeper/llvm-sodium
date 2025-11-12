@@ -34,7 +34,8 @@ using namespace llvm;
 #define DEBUG_TYPE "sodium-reginfo"
 
 SodiumRegisterInfo::SodiumRegisterInfo(const SodiumSubtarget &ST)
-  : SodiumGenRegisterInfo(Sodium::X2), Subtarget(ST) {}
+  : SodiumGenRegisterInfo(ST.is32Bit ? Sodium::D1 : Sodium::X2),
+    Subtarget(ST) {}
 
 const MCPhysReg
 *SodiumRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {

@@ -38,12 +38,10 @@ std::unique_ptr<MCObjectTargetWriter> createSodiumELFObjectWriter(uint8_t OSABI,
 
 // Defines symbolic names for Sodium registers.  This defines a mapping from
 // register name to register number.
-//
 #define GET_REGINFO_ENUM
 #include "SodiumGenRegisterInfo.inc"
 
 // Defines symbolic names for the Sodium instructions.
-//
 #define GET_INSTRINFO_ENUM
 #define GET_INSTRINFO_MC_HELPER_DECLS
 #include "SodiumGenInstrInfo.inc"

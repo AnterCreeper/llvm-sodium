@@ -46,7 +46,6 @@ public:
 
 private:
   bool tryShrinkShlLogicImm(SelectionDAG *CurDAG, SDNode *Node, unsigned BinOpc);
-
   bool tryBitfieldOpfromSHR(SelectionDAG *CurDAG, SDNode *Node, bool isSigned);
   bool tryBitfieldOpfromAND(SelectionDAG *CurDAG, SDNode *Node);
   bool tryBitfieldOpfromSExtInReg(SelectionDAG *CurDAG, SDNode *Node);

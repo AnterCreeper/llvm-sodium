@@ -136,9 +136,11 @@ SodiumMCCodeEmitter::getExprOpValue(const MCInst &MI, const MCExpr *Expr,
   unsigned MIFrm = SODIUMII::getFormat(MCII.get(MI.getOpcode()).TSFlags);
   bool isFMT_I = MIFrm == SODIUMII::InstFMT_I;
 
-  bool RelaxCandidate = false;
   MCExpr::ExprKind Kind = Expr->getKind();
+
+  bool RelaxCandidate = false;
   Sodium::Fixups FixupKind = Sodium::fixup_sodium_invalid;
+
   if (Kind == MCExpr::Target) {
     const SodiumMCExpr *SodiumExpr = cast<SodiumMCExpr>(Expr);
     switch (SodiumExpr->getKind()) {

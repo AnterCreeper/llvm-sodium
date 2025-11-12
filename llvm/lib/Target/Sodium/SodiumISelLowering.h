@@ -22,15 +22,13 @@ namespace llvm {
 namespace SodiumISD {
 enum NodeType : unsigned {
   FIRST_NUMBER = ISD::BUILTIN_OP_END,
-  Hi,
-  AddLo,
+  LI,
+  LA,
   Call,
   Tail,
   Ret,
   ERet,
-  LLA,
-  Mul32,
-  Mulu32
+  TBE,
 };
 } // end namespace SodiumISD
 
@@ -101,14 +99,22 @@ private:
   SDValue LowerSimpleAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
 
+  SDValue LowerSelect(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerBR_JT(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerVASTART(SDValue Op, SelectionDAG &DAG) const;
-  SDValue LowerSelect(SDValue Op, SelectionDAG &DAG) const;
-
   SDValue LowerMUL_LOHI(SDValue Op, SelectionDAG &DAG, bool isSigned) const;
 };
 
-//Configuration of OperationAction for i16
+//Configuration of DAGCombine
+static const ISD::NodeType ISD_COMBINE[] = {
+  ISD::ADD, ISD::SUB,
+  ISD::AND, ISD::OR, ISD::XOR,
+  ISD::MUL,
+  ISD::LOAD, ISD::STORE,
+  ISD::BR_CC, ISD::SELECT_CC
+};
+
+//Configuration of integer LowerOperation
 static const unsigned ISD_LEGAL[] = {
   ISD::CTLZ, ISD::CTTZ,
   ISD::SMIN, ISD::SMAX, ISD::UMIN, ISD::UMAX
@@ -121,22 +127,8 @@ static const unsigned ISD_EXPAND[] = {
   ISD::SHL_PARTS, ISD::SRA_PARTS, ISD::SRL_PARTS
 };
 static const unsigned ISD_CUSTOM[] = {
-  //Constant will be process in ISelDAGToDAG
   ISD::SMUL_LOHI, ISD::UMUL_LOHI,
   ISD::GlobalAddress, ISD::BlockAddress, ISD::ConstantPool, ISD::JumpTable
-};
-static const ISD::NodeType ISD_COMBINE[] = {
-  ISD::ADD, ISD::SUB,
-  ISD::AND, ISD::OR, ISD::XOR,
-  ISD::MUL,
-  ISD::LOAD, ISD::STORE,
-  ISD::BR_CC, ISD::SELECT_CC
-};
-
-//Configuration of OperationAction for v2i16
-static const unsigned ISD_LEGAL32[] = {
-  ISD::LOAD, ISD::STORE,
-  ISD::EXTRACT_VECTOR_ELT, ISD::BUILD_VECTOR,
 };
 
 } // end namespace llvm

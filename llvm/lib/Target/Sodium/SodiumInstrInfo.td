@@ -25,9 +25,9 @@ def SDTCallSeq_End : SDCallSeqEnd<[SDTCisVT<0, i16>, SDTCisVT<1, i16>]>;
 def SDTCallSeq_Start : SDCallSeqStart<[SDTCisVT<0, i16>, SDTCisVT<1, i16>]>;
 
 // Custom nodes
-def sodium_hi : SDNode<"SodiumISD::Hi", SDTIntUnaryOp>;
-def sodium_add_lo : SDNode<"SodiumISD::AddLo", SDTIntBinOp>;
-def sodium_ret : SDNode<"SodiumISD::Ret", SDTNone,
+def sodium_li : SDNode<"SodiumISD::LI", SDTIntUnaryOp>;
+def sodium_la : SDNode<"SodiumISD::LA", SDTIntUnaryOp>;
+def sodium_ret :  SDNode<"SodiumISD::Ret",  SDTNone,
   [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
 def sodium_eret : SDNode<"SodiumISD::ERet", SDTNone,
   [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
@@ -35,7 +35,9 @@ def sodium_call : SDNode<"SodiumISD::Call", SDTCall,
   [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
 def sodium_tail : SDNode<"SodiumISD::Tail", SDTCall,
   [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
-def sodium_lla : SDNode<"SodiumISD::LLA", SDTIntUnaryOp>;
+
+// Intrinsics
+def sodium_tbe : SDNode<"SodiumISD::TBE", SDTIntBinOp>;
 
 // Target-independent nodes, but with target-specific formats.
 def callseq_end : SDNode<"ISD::CALLSEQ_END", SDTCallSeq_End,
@@ -85,7 +87,7 @@ def simm13 : Operand<i16>,
 
 def uimm3_plus1 : Operand<i16>,
     ImmLeaf<i16, [{return isUInt<3>(Imm - 1);}]> {
-  let ParserMatchClass = UImmAsmOperand<3, "plus1">;
+  let ParserMatchClass = UImmAsmOperand<3, "Sub1">;
   let EncoderMethod = "getImmOpValueSub1";
   let DecoderMethod = "decodeUImmOperandAndPlus1<3>";
 }
@@ -94,7 +96,6 @@ def uimm3_plus1 : Operand<i16>,
 class UImm20Operand<ValueType VT> : Operand<VT>,
     ImmLeaf<VT, [{return isInt<20>(Imm);}]> {
   let EncoderMethod = "getImmOpValue";
-  let DecoderMethod = "decodeUImmOperand<20>";
   let MCOperandPredicate = [{
     int64_t Imm;
     if (MCOp.evaluateAsConstantImm(Imm))
@@ -103,19 +104,18 @@ class UImm20Operand<ValueType VT> : Operand<VT>,
   }];
 }
 
-def uimm20_lui16 : UImm20Operand<i16> {
-  let ParserMatchClass = UImmAsmOperand<20, "LUI16">;
-}
-def uimm20_lui32 : UImm20Operand<i32> {
-  let ParserMatchClass = UImmAsmOperand<20, "LUI32">;
+def uimm20_li16 : UImm20Operand<i16> {
+  let ParserMatchClass = UImmAsmOperand<16, "LI">;
+  let DecoderMethod = "decodeUImmOperand<20>";
 }
 def uimm20_auipc : UImm20Operand<XLenVT> {
-  let ParserMatchClass = UImmAsmOperand<20, "AUIPC">;
+  let ParserMatchClass = UImmAsmOperand<20, "LA">;
+  let DecoderMethod = "decodeUImmOperand<20>";
 }
 
 // A 26-bit signed immediate where the least significant bit is zero.
-def SImm26Lsb0BranchAsmOperand : SImmAsmOperand<26, "branch"> {
-  let ParserMethod = "parseBranchOffset";
+def SImm26Lsb0BranchAsmOperand : SImmAsmOperand<26, "Lsb0"> {
+  let ParserMethod = "parseImmediate";
 }
 
 def simm25_jump : Operand<OtherVT> {
@@ -134,7 +134,7 @@ def simm25_jump : Operand<OtherVT> {
 
 // A 21-bit signed immediate where the least significant bit is zero.
 def simm20_brcc : Operand<OtherVT> {
-  let ParserMatchClass = SImmAsmOperand<21, "brcc">;
+  let ParserMatchClass = SImmAsmOperand<21, "Lsb0">;
   let PrintMethod = "printBranchOperand";
   let EncoderMethod = "getImmOpValueAsr<1>";
   let DecoderMethod = "decodeSImmOperandAndLsl1<20>";
@@ -150,7 +150,7 @@ def simm20_brcc : Operand<OtherVT> {
 // A 21-bit signed immediate where the least significant bit is zero.
 def simm20_brind : Operand<XLenVT>,
     ImmLeaf<XLenVT, [{return isInt<21>(Imm);}]> {
-  let ParserMatchClass = SImmAsmOperand<21>;
+  let ParserMatchClass = SImmAsmOperand<21, "Lsb0">;
   let EncoderMethod = "getImmOpValueAsr<1>";
   let DecoderMethod = "decodeSImmOperandAndLsl1<20>";
   let MCOperandPredicate = [{
@@ -167,16 +167,10 @@ def CallSymbol : AsmOperandClass {
   let ParserMethod = "parseCallSymbol";
 }
 
-def JumpSymbol : AsmOperandClass {
-  let Name = "JumpSymbol";
-  let RenderMethod = "addImmOperands";
-  let ParserMethod = "parseJumpSymbol";
-}
-
 def BareSymbol : AsmOperandClass {
   let Name = "BareSymbol";
   let RenderMethod = "addImmOperands";
-  let ParserMethod = "parseImmediate";
+  let ParserMethod = "parseBareSymbol";
 }
 
 // A bare symbol used in call/tail only.
@@ -184,12 +178,7 @@ def call_symbol : Operand<XLenVT> {
   let ParserMatchClass = CallSymbol;
 }
 
-// A bare symbol used in pseudo jump only.
-def jump_symbol : Operand<XLenVT> {
-  let ParserMatchClass = JumpSymbol;
-}
-
-// A bare symbol used in "PseudoL*A" instructions.
+// A bare symbol used in "PseudoLA" instructions.
 def bare_symbol : Operand<XLenVT> {
   let ParserMatchClass = BareSymbol;
 }
@@ -311,45 +300,43 @@ def DCCLEAN : Cache_ri<0b111, 0b01, "dc.clean">;
 
 //Load Relative Address
 let IsSignExt = 1 in {
-def LUI :   FMT_LRA<0b001, (outs IntRegs:$rd), (ins uimm20_lui16:$imm20),
-            "lui",    "$rd, $imm20">, Sched<[WriteIALU]>;
-def LUI32 : FMT_LRA<0b011, (outs IntPair:$rd), (ins uimm20_lui32:$imm20),
-            "lui.32", "$rd, $imm20">, Sched<[WriteIALU]>;
+def LI : FMT_LRA<0b001, (outs IntRegs:$rd), (ins uimm20_li16:$imm20),
+    "li", "$rd, $imm20">, Sched<[WriteIALU]>;
 def AUIPC : FMT_LRA<0b000, (outs IntRegs:$rd), (ins uimm20_auipc:$imm20),
-            "auipc",  "$rd, $imm20">, Sched<[WriteIALU]>;
+    "auipc", "$rd, $imm20">, Sched<[WriteIALU]>;
 }
 
 //Read CSR
 class CSRRr_ri<bits<2> tag2, string opcodestr, RegisterClass RC>
-  : FMT_SR<0b100, tag2, (outs RC:$rs), (ins MemRegs:$rb, simm13:$imm13),
+  : FMT_SR<0b100, tag2, (outs RC:$rs), (ins IntRegs:$rb, simm13:$imm13),
               opcodestr, "$rs, ${imm13}(${rb})">,
       Sched<[ReadCSR, ReadMemBase]>;
 
 //Write CSR
 class CSRW_rri<bits<2> tag2, string opcodestr, RegisterClass RC>
-  : FMT_SR<0b010, tag2, (outs), (ins RC:$rs, MemRegs:$rb, simm13:$imm13),
+  : FMT_SR<0b010, tag2, (outs), (ins RC:$rs, IntRegs:$rb, simm13:$imm13),
               opcodestr, "$rs, ${imm13}(${rb})">,
       Sched<[WriteCSR, ReadMemBase]>;
 
 //Exchange CSR
 class CSRXr_rri<bits<2> tag2, string opcodestr, RegisterClass RC>
-  : FMT_SR<0b000, tag2, (outs RC:$T), (ins RC:$rs, MemRegs:$rb, simm13:$imm13),
+  : FMT_SR<0b000, tag2, (outs RC:$T), (ins RC:$rs, IntRegs:$rb, simm13:$imm13),
               opcodestr, "$rs, ${imm13}(${rb})">,
       Sched<[ReadCSR, WriteCSR, ReadMemBase]> {
   let Constraints = "$T = $rs";
 }
 
 def RCSR : CSRRr_ri<0b01, "rcsr", IntRegs>;
-def RCSR32 : CSRRr_ri<0b10, "rcsr.32", IntPair>;
-def RCSRHI : CSRRr_ri<0b11, "rcsr.hi", IntRegs>;
+def RCSRHI : CSRRr_ri<0b10, "rcsrh", IntRegs>;
+def RCSR32 : CSRRr_ri<0b11, "rcsrd", IntPair>;
 
 def WCSR : CSRW_rri<0b01, "wcsr", IntRegs>;
-def WCSR32 : CSRW_rri<0b10, "wcsr.32", IntPair>;
-def WCSRHI : CSRW_rri<0b11, "wcsr.hi", IntRegs>;
+def WCSRHI : CSRW_rri<0b10, "wcsrh", IntRegs>;
+def WCSR32 : CSRW_rri<0b11, "wcsrd", IntPair>;
 
 def XCSR : CSRXr_rri<0b01, "xcsr", IntRegs>;
-def XCSR32 : CSRXr_rri<0b10, "xcsr.32", IntPair>;
-def XCSRHI : CSRXr_rri<0b11, "xcsr.hi", IntRegs>;
+def XCSRHI : CSRXr_rri<0b10, "xcsrh", IntRegs>;
+def XCSR32 : CSRXr_rri<0b11, "xcsrd", IntPair>;
 
 //Arith
 def ADD : ALU_rr<0b000, 0b000, 0, "add">;
@@ -358,49 +345,53 @@ let IsSignExt = 1 in {
 def SLT : ALU_rr<0b000, 0b100, 0, "slt">;
 def SLTU : ALU_rr<0b000, 0b110, 0, "sltu">;
 }
-def ADDI : ALU_ri<0b000, 0b000, "addi">;
+def ADDI : ALU_ri<0b000, 0b000, "add.i">;
 let IsSignExt = 1 in {
-  def SLTI : ALU_ri<0b000, 0b100, "slti">;
-  def SLTUI : ALU_ri<0b000, 0b110, "sltui">;
+  def SLTI : ALU_ri<0b000, 0b100, "slt.i">;
+  def SLTUI : ALU_ri<0b000, 0b110, "sltu.i">;
 }
-def ADD32 : ALUd_dr<0b000, 0b010, 0, "add.32">;
-def SUB32 : ALUd_dr<0b000, 0b001, 0, "sub.32">;
-def ADDI32 : ALUd_di<0b000, 0b010, "addi.32">;
+def ADD32 : ALUd_dr<0b000, 0b010, 0, "add32">;
+def SUB32 : ALUd_dr<0b000, 0b001, 0, "sub32">;
+def ADDI32 : ALUd_di<0b000, 0b010, "add32.i">;
 
 //Shift
 def SLL : ALU_rr<0b010, 0b000, 0, "sll">;
 def SRL : ALU_rr<0b010, 0b010, 0, "srl">;
 def SRA : ALU_rr<0b010, 0b100, 0, "sra">;
 def ROL : ALU_rr<0b010, 0b110, 0, "rol">;
-def SLLI : ALU_ri<0b010, 0b000, "slli">;
-def SRLI : ALU_ri<0b010, 0b010, "srli">;
-def SRAI : ALU_ri<0b010, 0b100, "srai">;
-def ROLI : ALU_ri<0b010, 0b110, "roli">;
+def SLLI : ALU_ri<0b010, 0b000, "sll.i">;
+def SRLI : ALU_ri<0b010, 0b010, "srl.i">;
+def SRAI : ALU_ri<0b010, 0b100, "sra.i">;
+def ROLI : ALU_ri<0b010, 0b110, "rol.i">;
 def SHADD : SHADD_rri<0b010, 0b111, "shadd">;
 
 //Logical
 def OR : ALU_rr<0b001, 0b000, 0, "or">;
 def AND : ALU_rr<0b001, 0b100, 0, "and">;
 def XOR : ALU_rr<0b001, 0b010, 0, "xor">;
-def ORI : ALU_ri<0b001, 0b000, "ori">;
-def ANDI : ALU_ri<0b001, 0b100, "andi">;
-def XORI : ALU_ri<0b001, 0b010, "xori">;
+def ORI : ALU_ri<0b001, 0b000, "or.i">;
+def ANDI : ALU_ri<0b001, 0b100, "and.i">;
+def XORI : ALU_ri<0b001, 0b010, "xor.i">;
 def ORN : ALU_rr<0b001, 0b001, 0, "orn">;
 def ANDN : ALU_rr<0b001, 0b101, 0, "andn">;
 def XNOR : ALU_rr<0b001, 0b011, 0, "xnor">;
 
 //Multiply
-def MUL : ALU_rr<0b011, 0b000, 0, "mul">;
-def MULH : ALU_rr<0b011, 0b100, 0, "mulh">;
-def MULHU : ALU_rr<0b011, 0b110, 0, "mulhu">;
-def MULI : ALU_ri<0b011, 0b000, "muli">;
-def MULHI : ALU_ri<0b011, 0b100, "mulhi">;
-def MULD : ALUd_rr<0b011, 0b011, 0, "mul.32">;
-def MULDU : ALUd_rr<0b011, 0b001, 0, "mulu.32">;
+def MUL : ALU_rr<0b011,     0b000, 0, "mul">;      //multiply
+def MULH : ALU_rr<0b011,    0b100, 0, "mulh">;     //multiply high
+def MULHU : ALU_rr<0b011,   0b111, 0, "mulh.u">;   //multiply high unsigned
+def MULUS : ALU_rr<0b011,   0b110, 0, "mulh.us">;  //multiply high unsigned signed
+def MULI : ALU_ri<0b011,    0b000,    "mul.i">;    //multiply with immediate
+def MULHI : ALU_ri<0b011,   0b100,    "mulh.i">;   //multiply high with immediate
+def MULUSI : ALU_ri<0b011,  0b110,    "mulh.usi">; //multiply high unsigned signed with immediate
+def MULD : ALUd_rr<0b011,   0b001, 0, "mulhl">;    //multiply high low
+def MULDU : ALUd_rr<0b011,  0b011, 0, "mulhl.u">;  //multiply high low unsigned
+def MULDUS : ALUd_rr<0b011, 0b010, 0, "mulhl.us">; //multiply high low unsigned signed
 
 //Bitmanipulation
 def REV : ALU_r<0b101, 0b011, 0, "rev">;
 def CLZ : ALU_r<0b101, 0b101, 0, "clz">;
+def TBE : ALU_rr<0b101, 0b110, 0, "tbe">;
 def MIN : ALU_rr<0b101, 0b001, 0, "min">;
 def MAX : ALU_rr<0b101, 0b001, 2, "max">;
 def MINU : ALU_rr<0b101, 0b001, 1, "minu">;
@@ -456,19 +447,19 @@ def PseudoBRIND : Pseudo<(outs), (ins IntRegs:$rb, simm20_brind:$imm20), "", "",
                 PseudoInstExpansion<(BR IntRegs:$rb, simm20_brind:$imm20)>;
                                                               //brind jt  => BR $rb(flag), offset(flag)
 
-def CBZ  : CondB_ri<0b001, "cbz">;
-def CBNZ : CondB_ri<0b101, "cbnz">;
-def CBGE : CondB_ri<0b011, "cbge">;
-def CBLT : CondB_ri<0b110, "cblt">;
-def CBGT : CondB_ri<0b010, "cbgt">;
-def CBLE : CondB_ri<0b111, "cble">;
+def CBZ  : CondB_ri<0b001, "bc.ez">;
+def CBNZ : CondB_ri<0b101, "bc.nz">;
+def CBGE : CondB_ri<0b011, "bc.ge">;
+def CBLT : CondB_ri<0b110, "bc.lt">;
+def CBGT : CondB_ri<0b010, "bc.gt">;
+def CBLE : CondB_ri<0b111, "bc.le">;
 
 //===----------------------------------------------------------------------===//
 // Instructions related to Symbols, which need expand and fixup.
 //===----------------------------------------------------------------------===//
 // Expanded(expand at emit level, and share one fixup) at XXXMCCodeEmitter.cpp
 let isBarrier = 1, isBranch = 1, isIndirectBranch = 1, isTerminator = 1, Size = 8 in
-def PseudoJump : Pseudo<(outs), (ins jump_symbol:$dst),       //which is rare in use
+def PseudoJump : Pseudo<(outs), (ins call_symbol:$dst),       //which is rare in use
                 "jmp", "$dst", []>,
                 Sched<[WriteBranch, ReadBranch]>;             //brind sym  => BR (AUIPC %hi(sym)), %lo(sym),   relax to BR X0, offset(sym)
                                                               // formed by insertIndirectBranch, expanded by expandFunctionCall
@@ -493,8 +484,8 @@ def PseudoTailIndirect : Pseudo<(outs), (ins IntRegs:$rb), "", "",
 
 // Expanded at XXXExpandPseudoInsts.cpp
 let Size = 8 in {
-def PseudoLLA : Pseudo<(outs IntRegs:$dst), (ins bare_symbol:$src),
-                "lla", "$dst, $src", []>;                     //lla sym    => ADDI (AUIPC %hi(sym)), %lo(sym)
+def PseudoLA : Pseudo<(outs IntRegs:$dst), (ins bare_symbol:$src),
+                "la", "$dst, $src", []>;                     //lla sym    => ADDI (AUIPC %hi(sym)), %lo(sym)
 }
 
 //===----------------------------------------------------------------------===//
@@ -504,35 +495,30 @@ def PseudoLLA : Pseudo<(outs IntRegs:$dst), (ins bare_symbol:$src),
 // convention PatTy1Ty2. For pattern classes which offer a more complex
 // expansion, prefix the class name, e.g. ccBrPats.
 //===----------------------------------------------------------------------===//
+//Immediate
+def : Pat<(i16 uimm20_li16:$imm20), (LI uimm20_li16:$imm20)>;
+
 //Branch Indirect Pattern
 def : Pat<(brind IntRegs:$rb), (PseudoBRIND IntRegs:$rb, 0)>;
 def : Pat<(brind (add IntRegs:$rb, simm20_brind:$imm20)),
   (PseudoBRIND IntRegs:$rb, simm20_brind:$imm20)>;
 
-//Call&Tail Pattern
+//Call & Tail Pattern
 def : Pat<(sodium_call tglobaladdr:$func), (PseudoCall tglobaladdr:$func)>;
 def : Pat<(sodium_call texternalsym:$func), (PseudoCall texternalsym:$func)>;
 def : Pat<(sodium_tail (iPTR tglobaladdr:$dst)), (PseudoTail tglobaladdr:$dst)>;
 def : Pat<(sodium_tail (iPTR texternalsym:$dst)), (PseudoTail texternalsym:$dst)>;
 
 //Load Symbol
-def : Pat<(sodium_hi tjumptable:$in), (LUI tjumptable:$in)>;
-def : Pat<(sodium_hi tconstpool:$in), (LUI tconstpool:$in)>;
-def : Pat<(sodium_hi tglobaladdr:$in), (LUI tglobaladdr:$in)>;
-def : Pat<(sodium_hi tblockaddress:$in), (LUI tblockaddress:$in)>;
-def : Pat<(sodium_add_lo IntRegs:$hi, tglobaladdr:$lo),
-          (ADDI IntRegs:$hi, tglobaladdr:$lo)>;
-def : Pat<(sodium_add_lo IntRegs:$hi, tblockaddress:$lo),
-          (ADDI IntRegs:$hi, tblockaddress:$lo)>;
-def : Pat<(sodium_add_lo IntRegs:$hi, tjumptable:$lo),
-          (ADDI IntRegs:$hi, tjumptable:$lo)>;
-def : Pat<(sodium_add_lo IntRegs:$hi, tconstpool:$lo),
-          (ADDI IntRegs:$hi, tconstpool:$lo)>;
+def : Pat<(sodium_li tjumptable:$in), (LI tjumptable:$in)>;
+def : Pat<(sodium_li tconstpool:$in), (LI tconstpool:$in)>;
+def : Pat<(sodium_li tglobaladdr:$in), (LI tglobaladdr:$in)>;
+def : Pat<(sodium_li tblockaddress:$in), (LI tblockaddress:$in)>;
 
-def : Pat<(sodium_lla tjumptable:$in), (PseudoLLA tjumptable:$in)>;
-def : Pat<(sodium_lla tconstpool:$in), (PseudoLLA tconstpool:$in)>;
-def : Pat<(sodium_lla tglobaladdr:$in), (PseudoLLA tglobaladdr:$in)>;
-def : Pat<(sodium_lla tblockaddress:$in), (PseudoLLA tblockaddress:$in)>;
+def : Pat<(sodium_la tjumptable:$in), (PseudoLA tjumptable:$in)>;
+def : Pat<(sodium_la tconstpool:$in), (PseudoLA tconstpool:$in)>;
+def : Pat<(sodium_la tglobaladdr:$in), (PseudoLA tglobaladdr:$in)>;
+def : Pat<(sodium_la tblockaddress:$in), (PseudoLA tblockaddress:$in)>;
 
 //Cond Move
 def : Pat<(select IntRegs:$rs1, IntRegs:$T, IntRegs:$rs2),
@@ -692,6 +678,7 @@ def : PatRegReg<umin, MINU>;
 def : PatRegReg<umax, MAXU>;
 def : Pat<(i16 (cttz (i16 IntRegs:$rs))),  (CLZ (REV IntRegs:$rs))>;
 def : Pat<(i16 (bswap (i16 IntRegs:$rs))), (ROLI IntRegs:$rs, 8)>;
+def : PatRegReg<sodium_tbe, TBE>;
 
 def zexti8 : ComplexPattern<i16, 1, "SelectZExtBits<8>">;
 def : Pat<(i16 (or (zexti8 (i16 IntRegs:$rs1)), (shl IntRegs:$rs2, (i16 8)))),
@@ -707,16 +694,23 @@ def : Pat<(i16 (xor IntRegs:$rs1, (not IntRegs:$rs2))), (XNOR IntRegs:$rs1, IntR
 //===----------------------------------------------------------------------===//
 // build_vector
 def : Pat<(build_vector (i16 IntRegs:$rs1), (i16 IntRegs:$rs2)),
-          (INSERT_SUBREG
-            (INSERT_SUBREG (v2i16 (IMPLICIT_DEF)), (i16 IntRegs:$rs1), sub_even),
-            (i16 IntRegs:$rs2),
-            sub_odd)>;
+          (INSERT_SUBREG (INSERT_SUBREG (v2i16 (IMPLICIT_DEF)),
+            (i16 IntRegs:$rs1), sub_even),
+            (i16 IntRegs:$rs2), sub_odd)>;
 
 // extract_vector
 def : Pat<(extractelt (v2i16 IntPair:$rs), 0),
           (i16 (EXTRACT_SUBREG IntPair:$rs, sub_even))>;
 def : Pat<(extractelt (v2i16 IntPair:$rs), 1),
           (i16 (EXTRACT_SUBREG IntPair:$rs, sub_odd))>;
+
+// smul_lohi, umul_lohi
+// use Intrinsic to deal with v2i16 <= i16 x i16
+class DPatRegReg<Intrinsic OpNode, SodiumInst Inst>
+  : Pat<(v2i16 (OpNode IntRegs:$rs1, IntRegs:$rs2)), (Inst IntRegs:$rs1, IntRegs:$rs2)>;
+
+def : DPatRegReg<int_sodium_mul32, MULD>;
+def : DPatRegReg<int_sodium_mulu32, MULDU>;
 
 //===----------------------------------------------------------------------===//
 // Special codegen patterns

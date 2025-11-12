@@ -80,14 +80,14 @@ void SodiumInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
   assert(Opcode && "Register class not handled!");
 
   MachineMemOperand *MMO = MF->getMachineMemOperand(
-      MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOStore,
-      MFI.getObjectSize(FI), MFI.getObjectAlign(FI));
+    MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOStore,
+    MFI.getObjectSize(FI), MFI.getObjectAlign(FI));
 
   BuildMI(MBB, I, DL, get(Opcode))
-    .addReg(SrcReg, getKillRegState(isKill))
-    .addFrameIndex(FI)
-    .addImm(0)
-    .addMemOperand(MMO);
+      .addReg(SrcReg, getKillRegState(isKill))
+      .addFrameIndex(FI)
+      .addImm(0)
+      .addMemOperand(MMO);
 }
 
 void SodiumInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
@@ -107,13 +107,13 @@ void SodiumInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
   assert(Opcode && "Register class not handled!");
 
   MachineMemOperand *MMO = MF->getMachineMemOperand(
-      MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOLoad,
-      MFI.getObjectSize(FI), MFI.getObjectAlign(FI));
+    MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOLoad,
+    MFI.getObjectSize(FI), MFI.getObjectAlign(FI));
 
   BuildMI(MBB, I, DL, get(Opcode), DstReg)
-    .addFrameIndex(FI)
-    .addImm(0)
-    .addMemOperand(MMO);
+      .addFrameIndex(FI)
+      .addImm(0)
+      .addMemOperand(MMO);
 }
 
 void SodiumInstrInfo::parseCondBranch(MachineInstr &LastInst,
@@ -266,43 +266,34 @@ void SodiumInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   assert("copyPhysReg failed!");
 }
 
+#define GETBITS(x, n, m) ((x >> n) & ((1 << (m - n + 1)) - 1))
+
 /// This function generates the sequence of instructions needed to load
 /// immediate.
 void SodiumInstrInfo::movImm(MachineBasicBlock &MBB,
                              MachineBasicBlock::iterator MBBI,
                              const DebugLoc &DL, Register DstReg, uint64_t Val,
                              MachineInstr::MIFlag Flag, bool is32Bit) const {
-  if (isInt<13>(Val)) {
-    BuildMI(MBB, MBBI, DL, get(Sodium::ADDI), DstReg)
-      .addReg(Sodium::X0)
-      .addImm(Val)
+  int64_t Lo16 = GETBITS(Val, 0, 15);
+  int64_t Hi16 = GETBITS(Val, 16, 31);
+  BuildMI(MBB, MBBI, DL, get(Sodium::LI), DstReg)
+      .addImm(Lo16)
       .setMIFlag(Flag);
-  } else {
-    int64_t Hi19 = ((Val + 0x1000) >> 13) & (is32Bit ? 0x7FFFF : 0x7);
-    int64_t Lo13 = SignExtend32<13>(Val);
-    BuildMI(MBB, MBBI, DL, get(Sodium::LUI), DstReg)
-      .addImm(Hi19)
-      .setMIFlag(Flag);
-    if (Lo13 == 0) return;
-    BuildMI(MBB, MBBI, DL, get(Sodium::ADDI), DstReg)
-      .addReg(DstReg, RegState::Kill)
-      .addImm(Lo13)
-      .setMIFlag(Flag);
+  if (is32Bit) {
+    assert("Don't know how to deal with v2i16!");
   }
 }
 
 bool SodiumInstrInfo::isAsCheapAsAMove(const MachineInstr &MI) const {
   const unsigned Opcode = MI.getOpcode();
   switch (Opcode) {
-    default:
-      break;
-    //mv $?? $zero
-    case Sodium::ADDI:
-    case Sodium::ORI:
-    case Sodium::XORI:
-      return (MI.getOperand(1).isReg() &&
-        MI.getOperand(1).getReg() == Sodium::X0) ||
-        (MI.getOperand(2).isImm() && MI.getOperand(2).getImm() == 0);
+  default:
+    break;
+  case Sodium::ADDI:
+  case Sodium::ORI:
+  case Sodium::XORI:
+    return (MI.getOperand(1).isReg() && MI.getOperand(1).getReg() == Sodium::X0) ||
+           (MI.getOperand(2).isImm() && MI.getOperand(2).getImm() == 0);
   }
   return MI.isAsCheapAsAMove();
 }

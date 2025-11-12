@@ -75,10 +75,9 @@ static DecodeStatus DecodeIntPairRegisterClass(MCInst &Inst, uint32_t RegNo,
                                                const MCDisassembler *Decoder) {
   if (RegNo > 31)
     return MCDisassembler::Fail;
-  assert((RegNo & 1) && "Invalid RegNo for IntGPR Pairs");
-  MCRegister Reg = Sodium::D0 + RegNo;
+  MCRegister Reg = Sodium::D0 + (RegNo >> 1);
   Inst.addOperand(MCOperand::createReg(Reg));
-  return MCDisassembler::Success;
+  return (RegNo & 1) ? MCDisassembler::SoftFail : MCDisassembler::Success;
 }
 
 // Match with SodiumInstrInfo.td, then pass to tbgen inc file.

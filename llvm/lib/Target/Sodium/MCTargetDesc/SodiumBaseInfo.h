@@ -32,8 +32,8 @@ enum {
   MO_None = 0,
   MO_CALL = 1,
   MO_LO = 2,
-  MO_PCREL_LO = 3,
-  MO_HI = 4,
+  MO_HI = 3,
+  MO_PCREL_LO = 4,
   MO_PCREL_HI = 5,
 };
 

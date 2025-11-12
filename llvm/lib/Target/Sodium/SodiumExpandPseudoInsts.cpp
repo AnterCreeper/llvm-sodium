@@ -81,7 +81,7 @@ bool SodiumExpandPseudo::expandMI(MachineBasicBlock &MBB,
   // expanded instructions for each pseudo is correct in the Size field of the
   // tablegen definition for the pseudo.
   switch (MBBI->getOpcode()) {
-  case Sodium::PseudoLLA:
+  case Sodium::PseudoLA:
     return expandLoadLocalAddress(MBB, MBBI, NextMBBI);
   }
   return false;

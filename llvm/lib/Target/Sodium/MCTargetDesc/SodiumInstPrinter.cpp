@@ -57,7 +57,7 @@ bool SodiumInstPrinter::applyTargetSpecificCLOption(StringRef Opt) {
 }
 
 void SodiumInstPrinter::printRegName(raw_ostream &OS, MCRegister Reg) const {
-  OS << '$' << StringRef(getRegisterName(Reg)).lower();
+  OS << StringRef(getRegisterName(Reg)).lower();
 }
 
 void SodiumInstPrinter::printInst(const MCInst *MI, uint64_t Address,
@@ -76,7 +76,7 @@ void SodiumInstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
     return;
   }
   if (MO.isImm()) {
-    O << MO.getImm();
+    O << formatImm(MO.getImm());
     return;
   }
   assert(MO.isExpr() && "Unknown operand kind in printOperand");
