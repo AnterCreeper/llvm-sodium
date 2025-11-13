@@ -93,12 +93,19 @@ class SodiumAsmParser : public MCTargetAsmParser {
   bool processInstruction(MCInst &Inst, SMLoc IDLoc, OperandVector &Operands,
                           MCStreamer &Out);
 
+  bool generateImmOutOfRangeError(OperandVector &Operands, uint64_t ErrorInfo,
+                                  int64_t Lower, int64_t Upper,
+                                  const Twine &Msg);
+  bool generateImmOutOfRangeError(SMLoc ErrorLoc, int64_t Lower, int64_t Upper,
+                                  const Twine &Msg);
+
 // Auto-generated instruction matching functions
 #define GET_ASSEMBLER_HEADER
 #include "SodiumGenAsmMatcher.inc"
 
   bool parseOperand(OperandVector &Operands, StringRef Mnemonic);
   ParseStatus parseRegister(OperandVector &Operands, bool AllowParens = false);
+  ParseStatus parseCSRSystemRegister(OperandVector &Operands);
   ParseStatus parseMemOpBaseReg(OperandVector &Operands);
   ParseStatus parseOperandWithModifier(OperandVector &Operands);
   ParseStatus parseImmediate(OperandVector &Operands);
@@ -121,6 +128,20 @@ public:
 };
 
 #include "SodiumAsmOperand.h"
+
+bool SodiumAsmParser::generateImmOutOfRangeError(
+    SMLoc ErrorLoc, int64_t Lower, int64_t Upper,
+    const Twine &Msg = "immediate must be an integer in the range") {
+  return Error(ErrorLoc, Msg + " [" + Twine(Lower) + ", " + Twine(Upper) + "]");
+}
+
+bool SodiumAsmParser::generateImmOutOfRangeError(
+    OperandVector &Operands, uint64_t ErrorInfo, int64_t Lower, int64_t Upper,
+    const Twine &Msg = "immediate must be an integer in the range") {
+  SMLoc ErrorLoc = ((SodiumOperand &)*Operands[ErrorInfo]).getStartLoc();
+  return generateImmOutOfRangeError(ErrorLoc, Lower, Upper, Msg);
+}
+
 #include "SodiumParseMethod.h"
 
 #define GET_REGISTER_MATCHER

@@ -1,5 +1,5 @@
 #!/bin/bash
-project=""
-#project="clang;lld"
+#project=""
+project="clang;lld"
 #project="clang;lld;compiler-rt"
 cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DLLVM_ENABLE_PROJECTS=$project -DLLVM_TARGETS_TO_BUILD=Sodium -DLLVM_OPTIMIZED_TABLEGEN=On -DLLVM_CCACHE_BUILD=On -DCMAKE_LINKER_TYPE=MOLD -DLLVM_PARALLEL_LINK_JOBS=1 ..

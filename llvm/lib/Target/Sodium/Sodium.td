@@ -23,6 +23,8 @@ def FeatureRelax
 defvar Sodium16 = DefaultMode;
 def Sodium32 : HwMode<"+32bit", [IsSodium32]>;
 
+include "SodiumSystemRegisters.td"
+
 //===----------------------------------------------------------------------===//
 // Register File, Calling Conv, Instruction Descriptions
 //===----------------------------------------------------------------------===//

@@ -12,6 +12,7 @@
 
 #include "SodiumInstPrinter.h"
 #include "SodiumMCTargetDesc.h"
+#include "MCTargetDesc/SodiumBaseInfo.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
@@ -21,6 +22,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FormattedStream.h"
+
 using namespace llvm;
 
 #define DEBUG_TYPE "asm-printer"
@@ -57,7 +59,7 @@ bool SodiumInstPrinter::applyTargetSpecificCLOption(StringRef Opt) {
 }
 
 void SodiumInstPrinter::printRegName(raw_ostream &OS, MCRegister Reg) const {
-  OS << StringRef(getRegisterName(Reg)).lower();
+  OS << "$" << StringRef(getRegisterName(Reg)).lower();
 }
 
 void SodiumInstPrinter::printInst(const MCInst *MI, uint64_t Address,
@@ -98,6 +100,17 @@ void SodiumInstPrinter::printBranchOperand(const MCInst *MI, uint64_t Address,
   } else {
     O << MO.getImm();
   }
+}
+
+void SodiumInstPrinter::printCSRSystemRegister(const MCInst *MI, unsigned OpNo,
+                                               const MCSubtargetInfo &STI,
+                                               raw_ostream &O) {
+  unsigned Imm = MI->getOperand(OpNo).getImm();
+  auto SysReg = SodiumSysReg::lookupSysRegByEncoding(Imm);
+  if (SysReg)
+    O << SysReg->Name;
+  else
+    O << Imm;
 }
 
 const char *SodiumInstPrinter::getRegisterName(MCRegister Reg) {

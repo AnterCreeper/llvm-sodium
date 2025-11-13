@@ -70,7 +70,7 @@ public:
   bool isImm() const override { return Kind == KindTy::Immediate; }
   bool isReg() const override { return Kind == KindTy::Register; }
   bool isToken() const override { return Kind == KindTy::Token; }
-  bool isSystemRegister() const { return Kind == KindTy::SystemRegister; }
+  bool isCSRSystemRegister() const { return Kind == KindTy::SystemRegister; }
 
   /// getStartLoc - Gets location of the first token of this operand
   SMLoc getStartLoc() const override { return StartLoc; }
@@ -96,6 +96,16 @@ public:
   static std::unique_ptr<SodiumOperand> createToken(StringRef Str, SMLoc S) {
     auto Op = std::make_unique<SodiumOperand>(KindTy::Token);
     Op->Tok = Str;
+    Op->StartLoc = S;
+    Op->EndLoc = S;
+    return Op;
+  }
+  static std::unique_ptr<SodiumOperand> createSysReg(StringRef Str, SMLoc S,
+                                                     unsigned Encoding) {
+    auto Op = std::make_unique<SodiumOperand>(KindTy::SystemRegister);
+    Op->SysReg.Data = Str.data();
+    Op->SysReg.Length = Str.size();
+    Op->SysReg.Encoding = Encoding;
     Op->StartLoc = S;
     Op->EndLoc = S;
     return Op;
@@ -192,6 +202,12 @@ public:
 
   bool isUImm4() const { return IsUImmN<4>(); }
 
+  bool isSImm13Lsb0() const
+    FUNC(SodiumAsmParser::classifySymbolRef(getImm(), VK),
+         (isShiftedInt<12, 1>(Imm)),
+         (IsConstantImm && (VK == SodiumMCExpr::VK_SODIUM_None)) ||
+         (VK == SodiumMCExpr::VK_SODIUM_LO) ||
+         (VK == SodiumMCExpr::VK_SODIUM_PCREL_LO))
   bool isSImm13() const
     FUNC(SodiumAsmParser::classifySymbolRef(getImm(), VK),
          isInt<13>(Imm),
@@ -224,6 +240,10 @@ public:
   void addImmOperands(MCInst &Inst, unsigned N) const {
     assert(N == 1 && "Invalid number of operands!");
     addExpr(Inst, getImm());
+  }
+  void addCSRSystemRegisterOperands(MCInst &Inst, unsigned N) const {
+    assert(N == 1 && "Invalid number of operands!");
+    Inst.addOperand(MCOperand::createImm(SysReg.Encoding));
   }
 
 };

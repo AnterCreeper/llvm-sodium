@@ -7,6 +7,7 @@ add_llvm_component_library(LLVMSodiumDesc
   SodiumELFObjectWriter.cpp
   SodiumAsmBackend.cpp
   SodiumMCExpr.cpp
+  SodiumBaseInfo.cpp
 
   LINK_COMPONENTS
   MC

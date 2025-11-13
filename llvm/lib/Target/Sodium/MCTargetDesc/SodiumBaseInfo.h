@@ -57,6 +57,18 @@ static inline unsigned getFormat(uint64_t TSFlags) {
 }
 
 } // namespace SODIUMII
+
+namespace SodiumSysReg {
+struct SysReg {
+  const char *Name;
+  unsigned Encoding;
+};
+
+#define GET_SysRegsList_DECL
+#include "SodiumGenSearchableTables.inc"
+
+} // end namespace SodiumSysReg
+
 } // namespace llvm
 
 #endif

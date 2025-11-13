@@ -41,9 +41,9 @@ let RegAltNameIndices = [ABIRegAltName] in {
   def X0 : SodiumGPR<0, "x0", ["zero"]>, DwarfRegNum<[0]>;
   def X1 : SodiumGPR<1, "x1", ["t5"]>, DwarfRegNum<[1]>;
   def X2 : SodiumGPR<2, "x2", ["ra"]>, DwarfRegNum<[2]>;
-  def X3 : SodiumGPR<3, "x3", ["p1"]>, DwarfRegNum<[3]>;
+  def X3 : SodiumGPR<3, "x3", ["r0"]>, DwarfRegNum<[3]>;
   def X4 : SodiumGPR<4, "x4", ["sp"]>, DwarfRegNum<[4]>;
-  def X5 : SodiumGPR<5, "x5", ["p0"]>, DwarfRegNum<[5]>;
+  def X5 : SodiumGPR<5, "x5", ["r1"]>, DwarfRegNum<[5]>;
   def X6 : SodiumGPR<6, "x6", ["gp"]>, DwarfRegNum<[6]>;
   def X7 : SodiumGPR<7, "x7", ["t4"]>, DwarfRegNum<[7]>;
   def X8 : SodiumGPR<8, "x8", ["s0", "fp"]>, DwarfRegNum<[8]>;
@@ -76,21 +76,21 @@ let RegAltNameIndices = [ABIRegAltName] in {
 let RegAltNameIndices = [ABIRegAltName] in {
   let isConstant = true in
   def D0: SodiumGPRPair<0, "d0", ["zero32"], [X0, X1]>;
-  def D1: SodiumGPRPair<2, "d2", ["ra32"], [X2, X3]>;
-  def D2 : SodiumGPRPair<4, "d4", ["sp32"], [X4, X5]>;
-  def D3 : SodiumGPRPair<6, "d6", ["gp32"], [X6, X7]>;
-  def D4 : SodiumGPRPair<8, "d8", ["s0", "fp32"], [X8, X9]>;
-  def D5 : SodiumGPRPair<10, "d10", ["a0"], [X10, X11]>;
-  def D6 : SodiumGPRPair<12, "d12", ["a2"], [X12, X13]>;
-  def D7 : SodiumGPRPair<14, "d14", ["a4"], [X14, X15]>;
-  def D8 : SodiumGPRPair<16, "d16", ["a6"], [X16, X17]>;
-  def D9 : SodiumGPRPair<18, "d18", ["s2"], [X18, X19]>;
-  def D10 : SodiumGPRPair<20, "d20", ["s4"], [X20, X21]>;
-  def D11 : SodiumGPRPair<22, "d22", ["s6"], [X22, X23]>;
-  def D12 : SodiumGPRPair<24, "d24", ["s8"], [X24, X25]>;
-  def D13 : SodiumGPRPair<26, "d26", ["s10"], [X26, X27]>;
-  def D14 : SodiumGPRPair<28, "d28", ["t0"], [X28, X29]>;
-  def D15 : SodiumGPRPair<30, "d30", ["t2"], [X30, X31]>;
+  def D1: SodiumGPRPair<2, "d1", ["ra32"], [X2, X3]>;
+  def D2 : SodiumGPRPair<4, "d2", ["sp32"], [X4, X5]>;
+  def D3 : SodiumGPRPair<6, "d3", ["gp32"], [X6, X7]>;
+  def D4 : SodiumGPRPair<8, "d4", ["s0", "fp32"], [X8, X9]>;
+  def D5 : SodiumGPRPair<10, "d5", ["a0"], [X10, X11]>;
+  def D6 : SodiumGPRPair<12, "d6", ["a2"], [X12, X13]>;
+  def D7 : SodiumGPRPair<14, "d7", ["a4"], [X14, X15]>;
+  def D8 : SodiumGPRPair<16, "d8", ["a6"], [X16, X17]>;
+  def D9 : SodiumGPRPair<18, "d9", ["s2"], [X18, X19]>;
+  def D10 : SodiumGPRPair<20, "d10", ["s4"], [X20, X21]>;
+  def D11 : SodiumGPRPair<22, "d11", ["s6"], [X22, X23]>;
+  def D12 : SodiumGPRPair<24, "d12", ["s8"], [X24, X25]>;
+  def D13 : SodiumGPRPair<26, "d13", ["s10"], [X26, X27]>;
+  def D14 : SodiumGPRPair<28, "d14", ["t0"], [X28, X29]>;
+  def D15 : SodiumGPRPair<30, "d15", ["t2"], [X30, X31]>;
 }
 
 // The order of registers represents the preferred allocation sequence.

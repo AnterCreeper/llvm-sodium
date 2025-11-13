@@ -136,3 +136,58 @@ ParseStatus SodiumAsmParser::parseBareSymbol(OperandVector &Operands) {
   Operands.push_back(SodiumOperand::createImm(Res, S, E));
   return ParseStatus::Success;
 }
+
+ParseStatus SodiumAsmParser::parseCSRSystemRegister(OperandVector &Operands) {
+  SMLoc S = getLoc();
+  const MCExpr *Res;
+
+  switch (getLexer().getKind()) {
+    default:
+      return ParseStatus::NoMatch;
+    case AsmToken::LParen:
+    case AsmToken::Minus:
+    case AsmToken::Plus:
+    case AsmToken::Exclaim:
+    case AsmToken::Tilde:
+    case AsmToken::Integer:
+    case AsmToken::String: {
+      if (getParser().parseExpression(Res))
+        return ParseStatus::Failure;
+
+      auto *CE = dyn_cast<MCConstantExpr>(Res);
+      if (CE) {
+        int64_t Imm = CE->getValue();
+        if (isUInt<13>(Imm)) {
+          auto SysReg = SodiumSysReg::lookupSysRegByEncoding(Imm);
+          // Accept an immediate representing a named or un-named Sys Reg
+          // if the range is valid, regardless of the required features.
+          Operands.push_back(
+            SodiumOperand::createSysReg(SysReg ? SysReg->Name : "", S, Imm));
+          return ParseStatus::Success;
+        }
+      }
+      return generateImmOutOfRangeError(S, 0, (1 << 13) - 1);
+    }
+    case AsmToken::Identifier: {
+      StringRef Identifier;
+      if (getParser().parseIdentifier(Identifier))
+        return ParseStatus::Failure;
+
+      auto SysReg = SodiumSysReg::lookupSysRegByName(Identifier);
+      if (SysReg) {
+        Operands.push_back(
+          SodiumOperand::createSysReg(Identifier, S, SysReg->Encoding));
+        return ParseStatus::Success;
+      }
+      return generateImmOutOfRangeError(S, 0, (1 << 13) - 1,
+                                        "operand must be a valid system register "
+                                        "name or an integer in the range");
+    }
+    case AsmToken::Percent: {
+      // Discard operand with modifier.
+      return generateImmOutOfRangeError(S, 0, (1 << 13) - 1);
+    }
+  }
+
+  return ParseStatus::NoMatch;
+}

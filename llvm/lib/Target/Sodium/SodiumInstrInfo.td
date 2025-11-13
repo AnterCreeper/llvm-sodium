@@ -68,6 +68,11 @@ class UImmAsmOperand<int width, string suffix = "">
   : ImmAsmOperand<"U", width, suffix> {
 }
 
+def CSRSystemRegister : AsmOperandClass {
+  let Name = "CSRSystemRegister";
+  let ParserMethod = "parseCSRSystemRegister";
+}
+
 //===----------------------------------------------------------------------===//
 // Immediate Operand Definition
 //===----------------------------------------------------------------------===//
@@ -161,6 +166,13 @@ def simm20_brind : Operand<XLenVT>,
   }];
 }
 
+def simm12_hint : Operand<i16>,
+    ImmLeaf<i16, [{return isInt<13>(Imm);}]> {
+  let ParserMatchClass = SImmAsmOperand<13, "Lsb0">;
+  let EncoderMethod = "getImmOpValueAsr<1>";
+  let DecoderMethod = "decodeSImmOperandAndLsl1<12>";
+}
+
 def CallSymbol : AsmOperandClass {
   let Name = "CallSymbol";
   let RenderMethod = "addImmOperands";
@@ -181,6 +193,12 @@ def call_symbol : Operand<XLenVT> {
 // A bare symbol used in "PseudoLA" instructions.
 def bare_symbol : Operand<XLenVT> {
   let ParserMatchClass = BareSymbol;
+}
+
+def csr_sysreg : Operand<i16> {
+  let ParserMatchClass = CSRSystemRegister;
+  let PrintMethod = "printCSRSystemRegister";
+  let DecoderMethod = "decodeUImmOperand<13>";
 }
 
 //===----------------------------------------------------------------------===//
@@ -208,14 +226,14 @@ class Cache_ri<bits<3> func3, bits<2> tag2, string opcodestr>
     : FMT_LS<func3, tag2, (outs), (ins MemRegs:$rb, simm13:$imm13),
               opcodestr, "${imm13}(${rb})">,
       Sched<[ReadMemBase]> {
-  let rs = 0b00000;
+  let rs = 0;
 }
 
 class ALU_r<bits<3> func3, bits<3> tag3, bits<7> flag7, string opcodestr>
     : FMT_R<func3, tag3, flag7, (outs IntRegs:$rd), (ins IntRegs:$rs1),
               opcodestr, "$rd, $rs1">,
       Sched<[WriteIALU, ReadIALU]> {
-  let rs2 = 0b00000;
+  let rs2 = 0;
 }
 
 class ALU_ri<bits<3> func3, bits<3> tag3, string opcodestr>
@@ -266,16 +284,23 @@ class CMOV_rr<bits<3> func3, bits<3> tag3, bits<7> flag7, string opcodestr>
 }
 
 class CondB_ri<bits<3> func3, string opcodestr>
-    : FMT_B<func3, (outs),
-                   (ins IntRegs:$rs, simm20_brcc:$imm20),
-                   opcodestr, "$rs, $imm20">,
+    : FMT_B<func3, (outs), (ins IntRegs:$rs, simm20_brcc:$imm20),
+              opcodestr, "$rs, $imm20">,
       Sched<[WriteBranch, ReadBranch]> {
   let isBranch = 1;
   let isTerminator = 1;
 }
 
-class HINT<bits<3> func3, bits<3> tag3, string asmstr>
-    : FMT_HT<func3, tag3, 0, (outs), (ins), asmstr, "">;
+class HINT<bits<3> func3, bits<3> tag3, string opcodestr>
+    : FMT_HT<func3, tag3, 0, (outs), (ins), opcodestr, ""> {
+  let rb = 0;
+  let imm12 = 0;
+}
+
+class HINT_ri<bits<3> func3, bits<3> tag3, string opcodestr>
+    : FMT_HT<func3, tag3, 0, (outs), (ins MemRegs:$rb, simm12_hint:$imm12),
+              opcodestr, "${imm12}(${rb})">,
+      Sched<[ReadMemBase]>;
 
 //===----------------------------------------------------------------------===//
 // Instructions common
@@ -307,36 +332,50 @@ def AUIPC : FMT_LRA<0b000, (outs IntRegs:$rd), (ins uimm20_auipc:$imm20),
 }
 
 //Read CSR
+let hasNoSchedulingInfo = 1,
+    hasSideEffects = 1, mayLoad = 0, mayStore = 0 in {
 class CSRRr_ri<bits<2> tag2, string opcodestr, RegisterClass RC>
-  : FMT_SR<0b100, tag2, (outs RC:$rs), (ins IntRegs:$rb, simm13:$imm13),
-              opcodestr, "$rs, ${imm13}(${rb})">,
-      Sched<[ReadCSR, ReadMemBase]>;
+  : FMT_SR<0b100, tag2, 0, (outs RC:$rs), (ins csr_sysreg:$imm13),
+              opcodestr, "$imm13, $rs">,
+      Sched<[ReadCSR]>;
 
 //Write CSR
 class CSRW_rri<bits<2> tag2, string opcodestr, RegisterClass RC>
-  : FMT_SR<0b010, tag2, (outs), (ins RC:$rs, IntRegs:$rb, simm13:$imm13),
-              opcodestr, "$rs, ${imm13}(${rb})">,
-      Sched<[WriteCSR, ReadMemBase]>;
+  : FMT_SR<0b010, tag2, 0, (outs), (ins csr_sysreg:$imm13, RC:$rs),
+              opcodestr, "$imm13, $rs">,
+      Sched<[WriteCSR]>;
 
-//Exchange CSR
+//Atomic Exchange CSR
 class CSRXr_rri<bits<2> tag2, string opcodestr, RegisterClass RC>
-  : FMT_SR<0b000, tag2, (outs RC:$T), (ins RC:$rs, IntRegs:$rb, simm13:$imm13),
-              opcodestr, "$rs, ${imm13}(${rb})">,
-      Sched<[ReadCSR, WriteCSR, ReadMemBase]> {
+  : FMT_SR<0b000, tag2, 0, (outs RC:$T), (ins csr_sysreg:$imm13, RC:$rs),
+              opcodestr, "$imm13, $rs">,
+      Sched<[ReadCSR, WriteCSR]> {
   let Constraints = "$T = $rs";
 }
 
+//Notify CSR
+class CSRNT_ri<bits<2> tag2, string opcodestr>
+  : FMT_SR<0b110, tag2, 0, (outs), (ins csr_sysreg:$imm13),
+              opcodestr, "$imm13"> {
+  let rs = 0;
+}
+}
+
 def RCSR : CSRRr_ri<0b01, "rcsr", IntRegs>;
-def RCSRHI : CSRRr_ri<0b10, "rcsrh", IntRegs>;
-def RCSR32 : CSRRr_ri<0b11, "rcsrd", IntPair>;
+def RCSRH : CSRRr_ri<0b10, "rcsr.h", IntRegs>;
+def RCSRD : CSRRr_ri<0b11, "rcsr.d", IntPair>;
 
 def WCSR : CSRW_rri<0b01, "wcsr", IntRegs>;
-def WCSRHI : CSRW_rri<0b10, "wcsrh", IntRegs>;
-def WCSR32 : CSRW_rri<0b11, "wcsrd", IntPair>;
+def WCSRH : CSRW_rri<0b10, "wcsr.h", IntRegs>;
+def WCSRD : CSRW_rri<0b11, "wcsr.d", IntPair>;
 
 def XCSR : CSRXr_rri<0b01, "xcsr", IntRegs>;
-def XCSRHI : CSRXr_rri<0b10, "xcsrh", IntRegs>;
-def XCSR32 : CSRXr_rri<0b11, "xcsrd", IntPair>;
+def XCSRH : CSRXr_rri<0b10, "xcsr.h", IntRegs>;
+def XCSRD : CSRXr_rri<0b11, "xcsr.d", IntPair>;
+
+def NTCSR : CSRNT_ri<0b01, "ntcsr">;
+def NTCSRH : CSRNT_ri<0b10, "ntcsr.h">;
+def NTCSRD : CSRNT_ri<0b11, "ntcsr.d">;
 
 //Arith
 def ADD : ALU_rr<0b000, 0b000, 0, "add">;
@@ -409,8 +448,12 @@ def MOVN : CMOV_rr<0b100, 0b001, 0, "movn">;
 //System Ctl
 def NOP : HINT<0b000, 0b000, "nop">;
 def WFI : HINT<0b000, 0b001, "wfi">;
-def ECALL  : HINT<0b001, 1, "ecall">,  Sched<[WriteBranch]>;
-def EBREAK : HINT<0b001, 2, "ebreak">, Sched<[WriteBranch]>;
+def WFE : HINT<0b000, 0b101, "wfe">;
+def UNIMP : HINT<0b001, 1, "unimp">,  Sched<[WriteBranch]>;
+def ECALL : HINT<0b001, 2, "ecall">,  Sched<[WriteBranch]>;
+def EBREAK : HINT<0b001, 3, "ebreak">, Sched<[WriteBranch]>;
+
+def MWAIT : HINT_ri<0b000, 0b011, "mwait">;
 
 def ADJCALLSTACKUP : Pseudo<(outs), (ins i16imm:$amt1, i16imm:$amt2),
                      "!ADJCALLSTACKUP", "$amt1",

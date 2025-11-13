@@ -12,6 +12,7 @@ tablegen(LLVM SodiumGenMCCodeEmitter.inc -gen-emitter)
 tablegen(LLVM SodiumGenRegisterInfo.inc -gen-register-info)
 tablegen(LLVM SodiumGenMCPseudoLowering.inc -gen-pseudo-lowering)
 tablegen(LLVM SodiumGenSubtargetInfo.inc -gen-subtarget)
+tablegen(LLVM SodiumGenSearchableTables.inc -gen-searchable-tables)
 
 add_public_tablegen_target(SodiumCommonTableGen)
 
