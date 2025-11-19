@@ -6,7 +6,7 @@ bool SodiumAsmParser::parseDirectiveOption() {
   if (parseToken(AsmToken::Identifier, "expected identifier"))
     return true;
 
-  StringRef Option = Tok.getIdentifier();
+  //StringRef Option = Tok.getIdentifier();
 
   // Unknown option.
   Warning(Parser.getTok().getLoc(), "unknown option");

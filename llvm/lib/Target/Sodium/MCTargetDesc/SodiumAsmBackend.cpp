@@ -31,26 +31,29 @@ const MCFixupKindInfo &SodiumAsmBackend::getFixupKindInfo(MCFixupKind Kind) cons
       // SodiumFixupKinds.h.
       //
       // name offset bits flags
-      {"fixup_sodium_hi19", 0, 32, 0},
-      {"fixup_sodium_pcrel_hi19", 0, 32,
-       MCFixupKindInfo::FKF_IsPCRel | MCFixupKindInfo::FKF_IsTarget},
-      {"fixup_sodium_lo13", 0, 32, 0},
-      {"fixup_sodium_lo13s", 0, 32, 0},
-      {"fixup_sodium_pcrel_lo13", 0, 32,
-       MCFixupKindInfo::FKF_IsPCRel | MCFixupKindInfo::FKF_IsTarget},
-      {"fixup_sodium_pcrel_lo13s", 0, 32,
-       MCFixupKindInfo::FKF_IsPCRel | MCFixupKindInfo::FKF_IsTarget},
-      {"fixup_sodium_brcc20", 0, 32, MCFixupKindInfo::FKF_IsPCRel},
-      {"fixup_sodium_brind20", 0, 32, MCFixupKindInfo::FKF_IsPCRel},
-      {"fixup_sodium_jump25", 0, 32, MCFixupKindInfo::FKF_IsPCRel},
-      {"fixup_sodium_relax", 0, 0, 0},
-      {"fixup_sodium_call", 0, 64, MCFixupKindInfo::FKF_IsPCRel},
       {"fixup_sodium_add_8", 0, 8, 0},
       {"fixup_sodium_sub_8", 0, 8, 0},
       {"fixup_sodium_add_16", 0, 16, 0},
       {"fixup_sodium_sub_16", 0, 16, 0},
       {"fixup_sodium_add_32", 0, 32, 0},
       {"fixup_sodium_sub_32", 0, 32, 0},
+      {"fixup_sodium_jump25", 0, 32, MCFixupKindInfo::FKF_IsPCRel},
+      {"fixup_sodium_brcc20", 0, 32, MCFixupKindInfo::FKF_IsPCRel},
+      {"fixup_sodium_brind20", 0, 32, MCFixupKindInfo::FKF_IsPCRel},
+      {"fixup_sodium_call", 0, 64, MCFixupKindInfo::FKF_IsPCRel},
+      {"fixup_sodium_relax", 0, 0, 0},
+      {"fixup_sodium_hi16", 0, 32, 0},
+      {"fixup_sodium_lo16", 0, 32, 0},
+      {"fixup_sodium_pcrel_add",   0, 32,
+       MCFixupKindInfo::FKF_IsPCRel | MCFixupKindInfo::FKF_IsTarget},
+      {"fixup_sodium_pcrel_add12", 0, 32,
+       MCFixupKindInfo::FKF_IsPCRel | MCFixupKindInfo::FKF_IsTarget},
+      {"fixup_sodium_pcrel_add20", 0, 32,
+       MCFixupKindInfo::FKF_IsPCRel | MCFixupKindInfo::FKF_IsTarget},
+      {"fixup_sodium_pcrel_lo13i", 0, 32,
+       MCFixupKindInfo::FKF_IsPCRel | MCFixupKindInfo::FKF_IsTarget},
+      {"fixup_sodium_pcrel_lo13l", 0, 32,
+       MCFixupKindInfo::FKF_IsPCRel | MCFixupKindInfo::FKF_IsTarget},
   };
   static_assert((std::size(Infos)) == Sodium::NumTargetFixupKinds,
                 "Not all fixup kinds added to Infos array");
@@ -105,7 +108,7 @@ bool SodiumAsmBackend::handleAddSubRelocations(const MCAsmLayout &Layout,
 
 #define ALIGN(x, y) if((x) & ((1 << (y)) - 1)) Ctx.reportError(Fixup.getLoc(), "fixup value must be aligned")
 
-//bit field extract, return X[m:n]
+#define BIT(n)           (1 << (n))
 #define GETBITS(x, n, m) ((x >> n) & ((1 << (m - n + 1)) - 1))
 
 static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
@@ -119,47 +122,63 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
   case Sodium::fixup_sodium_sub_16:
   case Sodium::fixup_sodium_add_32:
   case Sodium::fixup_sodium_sub_32:
-  case FK_Data_1:
   case FK_Data_2:
   case FK_Data_4:
     return Value;
-  case Sodium::fixup_sodium_lo13:
-  case Sodium::fixup_sodium_pcrel_lo13:   //ADDI
-    return (GETBITS(Value, 0, 0)   << 29) |
-           (GETBITS(Value, 1, 12)  << 17);
-  case Sodium::fixup_sodium_lo13s:
-  case Sodium::fixup_sodium_pcrel_lo13s:  //LW
-    return (GETBITS(Value, 0, 0)   << 29) |
-           (GETBITS(Value, 1, 5)   << 4)  |
-           (GETBITS(Value, 6, 12)  << 22);
-  case Sodium::fixup_sodium_hi19:
-  case Sodium::fixup_sodium_pcrel_hi19: { //AUIPC
-    // Add 1 to test if bit 12 is 1, to compensate for low 13 bits being negative.
-    Value = (Value + 0x1000) >> 13;
+  case Sodium::fixup_sodium_lo16: {
+    Value = GETBITS(Value, 0,  15);
     return (GETBITS(Value, 0,  14) << 17) |
            (GETBITS(Value, 15, 19) << 12);
   }
-  case Sodium::fixup_sodium_jump25: {     //B
+  case Sodium::fixup_sodium_hi16: {
+    Value = GETBITS(Value, 16, 31);
+    return (GETBITS(Value, 0,  14) << 17) |
+           (GETBITS(Value, 15, 19) << 12);
+  }
+  case Sodium::fixup_sodium_pcrel_lo13i:    //addi
+    return (GETBITS(Value, 0, 0)   << 29) |
+           (GETBITS(Value, 1, 12)  << 17);
+  case Sodium::fixup_sodium_pcrel_lo13l:    //lw
+    return (GETBITS(Value, 0, 0)   << 29) |
+           (GETBITS(Value, 1, 5)   << 4)  |
+           (GETBITS(Value, 6, 12)  << 22);
+  case Sodium::fixup_sodium_pcrel_add: {    //pcaddi
+    Value = Value >> 1;
+    return (GETBITS(Value, 0,  14) << 17) |
+           (GETBITS(Value, 15, 19) << 12);
+  }
+  case Sodium::fixup_sodium_pcrel_add12: {  //pcadd12i
+    // Add 1 to test if bit 12 is 1, to compensate for low 13 bits being negative.
+    Value = (Value + BIT(12)) >> 13;
+    return (GETBITS(Value, 0,  14) << 17) |
+           (GETBITS(Value, 15, 19) << 12);
+  }
+  case Sodium::fixup_sodium_pcrel_add20: {  //pcadd20i
+    // Add 1 to test if bit 20 is 1, to compensate for low 21 bits being negative.
+    Value = (Value + BIT(20)) >> 21;
+    return (GETBITS(Value, 0,  14) << 17) |
+           (GETBITS(Value, 15, 19) << 12);
+  }
+  case Sodium::fixup_sodium_jump25: {       //b
     ALIGN(Value, 1);
     return (GETBITS(Value, 1,  5)  << 4)  |
            (GETBITS(Value, 6,  15) << 22) |
            (GETBITS(Value, 16, 25) << 12);
   }
   case Sodium::fixup_sodium_brcc20:
-  case Sodium::fixup_sodium_brind20: {
+  case Sodium::fixup_sodium_brind20: {      //br, bc
     ALIGN(Value, 1);
     return (GETBITS(Value, 1,  5)  << 4)  |
            (GETBITS(Value, 6,  15) << 22) |
            (GETBITS(Value, 16, 20) << 12);
   }
-  case Sodium::fixup_sodium_call: {
+  case Sodium::fixup_sodium_call: {         //pcadd20i, blr
     ALIGN(Value, 1);
-    uint64_t LowerImm = (Value & 0x1fffULL);        //13 bits
-    uint64_t UpperImm = (Value + 0x1000ULL) >> 13;  //19 bits
-    //BLR
+    uint64_t LowerImm = GETBITS(Value, 0, 20);      //21 bits
+    uint64_t UpperImm = (Value + BIT(20)) >> 21;    //11 bits
     LowerImm = (GETBITS(LowerImm, 1,  5)  << 4)  |
-               (GETBITS(LowerImm, 6,  12) << 22);
-    //AUIPC
+               (GETBITS(LowerImm, 6,  15) << 22) |
+               (GETBITS(LowerImm, 16, 20) << 12);
     UpperImm = (GETBITS(UpperImm, 0,  14) << 17) |
                (GETBITS(UpperImm, 15, 19) << 12);
     return UpperImm | (LowerImm << 32);

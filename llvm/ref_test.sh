@@ -1,6 +1,6 @@
 #!/bin/bash
-target=xcore
-#target=riscv32
+#target=xcore
+target=riscv32
 clang ~/main.c -c -emit-llvm -O$1 --target=$target -o ~/main.bc
 llvm-dis ~/main.bc
 cat ~/main.ll

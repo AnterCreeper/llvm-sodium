@@ -24,11 +24,13 @@ class SodiumMCExpr : public MCTargetExpr {
 public:
   enum VariantKind {
     VK_SODIUM_None,
-    VK_SODIUM_LO,
-    VK_SODIUM_HI,
-    VK_SODIUM_PCREL_LO,
-    VK_SODIUM_PCREL_HI,
     VK_SODIUM_CALL,
+    VK_SODIUM_LO16,
+    VK_SODIUM_HI16,
+    VK_SODIUM_PCREL_LO,
+    VK_SODIUM_PCREL_ADD,
+    VK_SODIUM_PCREL_ADD12,
+    VK_SODIUM_PCREL_ADD20,
     VK_SODIUM_Invalid // Must be the last item
   };
 

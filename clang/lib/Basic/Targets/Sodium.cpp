@@ -27,9 +27,8 @@ static constexpr Builtin::Info BuiltinInfo[] = {
 };
 
 ArrayRef<Builtin::Info> SodiumTargetInfo::getTargetBuiltins() const {
-  return llvm::makeArrayRef(BuiltinInfo, clang::Sodium::LastTSBuiltin -
-    Builtin::FirstTSBuiltin);
-  return std::nullopt;
+  return llvm::ArrayRef(BuiltinInfo,
+                        clang::Sodium::LastTSBuiltin - Builtin::FirstTSBuiltin);
 }
 
 ArrayRef<const char *> SodiumTargetInfo::getGCCRegNames() const {

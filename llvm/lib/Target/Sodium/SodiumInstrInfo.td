@@ -109,11 +109,11 @@ class UImm20Operand<ValueType VT> : Operand<VT>,
   }];
 }
 
-def uimm20_li16 : UImm20Operand<i16> {
+def uimm20 : UImm20Operand<i16> {
   let ParserMatchClass = UImmAsmOperand<16, "LI">;
   let DecoderMethod = "decodeUImmOperand<20>";
 }
-def uimm20_auipc : UImm20Operand<XLenVT> {
+def uimm20_pcaddi : UImm20Operand<XLenVT> {
   let ParserMatchClass = UImmAsmOperand<20, "LA">;
   let DecoderMethod = "decodeUImmOperand<20>";
 }
@@ -166,11 +166,11 @@ def simm20_brind : Operand<XLenVT>,
   }];
 }
 
-def simm12_hint : Operand<i16>,
-    ImmLeaf<i16, [{return isInt<13>(Imm);}]> {
-  let ParserMatchClass = SImmAsmOperand<13, "Lsb0">;
+def simm15_hint : Operand<i16>,
+    ImmLeaf<i16, [{return isInt<16>(Imm);}]> {
+  let ParserMatchClass = SImmAsmOperand<16, "Lsb0">;
   let EncoderMethod = "getImmOpValueAsr<1>";
-  let DecoderMethod = "decodeSImmOperandAndLsl1<12>";
+  let DecoderMethod = "decodeSImmOperandAndLsl1<15>";
 }
 
 def CallSymbol : AsmOperandClass {
@@ -291,15 +291,15 @@ class CondB_ri<bits<3> func3, string opcodestr>
   let isTerminator = 1;
 }
 
-class HINT<bits<3> func3, bits<3> tag3, string opcodestr>
-    : FMT_HT<func3, tag3, 0, (outs), (ins), opcodestr, ""> {
+class HINT<bits<3> func3, bits<5> tag5, string opcodestr>
+    : FMT_HT<func3, tag5, (outs), (ins), opcodestr, ""> {
   let rb = 0;
-  let imm12 = 0;
+  let imm15 = 0;
 }
 
-class HINT_ri<bits<3> func3, bits<3> tag3, string opcodestr>
-    : FMT_HT<func3, tag3, 0, (outs), (ins MemRegs:$rb, simm12_hint:$imm12),
-              opcodestr, "${imm12}(${rb})">,
+class HINT_ri<bits<3> func3, bits<5> tag5, string opcodestr>
+    : FMT_HT<func3, tag5, (outs), (ins MemRegs:$rb, simm15_hint:$imm15),
+              opcodestr, "${imm15}(${rb})">,
       Sched<[ReadMemBase]>;
 
 //===----------------------------------------------------------------------===//
@@ -325,38 +325,48 @@ def DCCLEAN : Cache_ri<0b111, 0b01, "dc.clean">;
 
 //Load Relative Address
 let IsSignExt = 1 in {
-def LI : FMT_LRA<0b001, (outs IntRegs:$rd), (ins uimm20_li16:$imm20),
+def LI : FMT_LRA<0b000, (outs IntRegs:$rd), (ins uimm20:$imm20),
     "li", "$rd, $imm20">, Sched<[WriteIALU]>;
-def AUIPC : FMT_LRA<0b000, (outs IntRegs:$rd), (ins uimm20_auipc:$imm20),
-    "auipc", "$rd, $imm20">, Sched<[WriteIALU]>;
+def PCADDI : FMT_LRA<0b100, (outs IntRegs:$rd), (ins uimm20_pcaddi:$imm20),
+    "pcaddi", "$rd, $imm20">, Sched<[WriteIALU]>;
+def PCADD12I : FMT_LRA<0b101, (outs IntRegs:$rd), (ins uimm20_pcaddi:$imm20),
+    "pcadd12i", "$rd, $imm20">, Sched<[WriteIALU]>;
+def PCADD20I : FMT_LRA<0b110, (outs IntRegs:$rd), (ins uimm20_pcaddi:$imm20),
+    "pcadd20i", "$rd, $imm20">, Sched<[WriteIALU]>;
 }
 
 //Read CSR
 let hasNoSchedulingInfo = 1,
     hasSideEffects = 1, mayLoad = 0, mayStore = 0 in {
 class CSRRr_ri<bits<2> tag2, string opcodestr, RegisterClass RC>
-  : FMT_SR<0b100, tag2, 0, (outs RC:$rs), (ins csr_sysreg:$imm13),
+  : FMT_SR<0b100, tag2, (outs RC:$rs), (ins csr_sysreg:$imm13),
               opcodestr, "$imm13, $rs">,
-      Sched<[ReadCSR]>;
+      Sched<[ReadCSR]> {
+  let pos5 = 0;
+}
 
 //Write CSR
 class CSRW_rri<bits<2> tag2, string opcodestr, RegisterClass RC>
-  : FMT_SR<0b010, tag2, 0, (outs), (ins csr_sysreg:$imm13, RC:$rs),
+  : FMT_SR<0b010, tag2, (outs), (ins csr_sysreg:$imm13, RC:$rs),
               opcodestr, "$imm13, $rs">,
-      Sched<[WriteCSR]>;
+      Sched<[WriteCSR]> {
+  let pos5 = 0;
+}
 
 //Atomic Exchange CSR
 class CSRXr_rri<bits<2> tag2, string opcodestr, RegisterClass RC>
-  : FMT_SR<0b000, tag2, 0, (outs RC:$T), (ins csr_sysreg:$imm13, RC:$rs),
+  : FMT_SR<0b000, tag2, (outs RC:$T), (ins csr_sysreg:$imm13, RC:$rs),
               opcodestr, "$imm13, $rs">,
       Sched<[ReadCSR, WriteCSR]> {
+  let pos5 = 0;
   let Constraints = "$T = $rs";
 }
 
 //Notify CSR
 class CSRNT_ri<bits<2> tag2, string opcodestr>
-  : FMT_SR<0b110, tag2, 0, (outs), (ins csr_sysreg:$imm13),
+  : FMT_SR<0b110, tag2, (outs), (ins csr_sysreg:$imm13),
               opcodestr, "$imm13"> {
+  let pos5 = 0;
   let rs = 0;
 }
 }
@@ -392,6 +402,8 @@ let IsSignExt = 1 in {
 def ADD32 : ALUd_dr<0b000, 0b010, 0, "add32">;
 def SUB32 : ALUd_dr<0b000, 0b001, 0, "sub32">;
 def ADDI32 : ALUd_di<0b000, 0b010, "add32.i">;
+def MOVZ : CMOV_rr<0b000, 0b101, 0, "movz">;
+def MOVN : CMOV_rr<0b000, 0b111, 0, "movn">;
 
 //Shift
 def SLL : ALU_rr<0b010, 0b000, 0, "sll">;
@@ -402,7 +414,7 @@ def SLLI : ALU_ri<0b010, 0b000, "sll.i">;
 def SRLI : ALU_ri<0b010, 0b010, "srl.i">;
 def SRAI : ALU_ri<0b010, 0b100, "sra.i">;
 def ROLI : ALU_ri<0b010, 0b110, "rol.i">;
-def SHADD : SHADD_rri<0b010, 0b111, "shadd">;
+def SHADD : SHADD_rri<0b010, 0b001, "shadd">;
 
 //Logical
 def OR : ALU_rr<0b001, 0b000, 0, "or">;
@@ -428,32 +440,28 @@ def MULDU : ALUd_rr<0b011,  0b011, 0, "mulhl.u">;  //multiply high low unsigned
 def MULDUS : ALUd_rr<0b011, 0b010, 0, "mulhl.us">; //multiply high low unsigned signed
 
 //Bitmanipulation
-def REV : ALU_r<0b101, 0b011, 0, "rev">;
+def REV : ALU_r<0b101, 0b001, 0, "rev">;
 def CLZ : ALU_r<0b101, 0b101, 0, "clz">;
+def MIN : ALU_rr<0b101, 0b011, 0, "min">;
+def MAX : ALU_rr<0b101, 0b011, 2, "max">;
+def MINU : ALU_rr<0b101, 0b011, 1, "minu">;
+def MAXU : ALU_rr<0b101, 0b011, 3, "maxu">;
 def TBE : ALU_rr<0b101, 0b110, 0, "tbe">;
-def MIN : ALU_rr<0b101, 0b001, 0, "min">;
-def MAX : ALU_rr<0b101, 0b001, 2, "max">;
-def MINU : ALU_rr<0b101, 0b001, 1, "minu">;
-def MAXU : ALU_rr<0b101, 0b001, 3, "maxu">;
 def PACK : ALU_rri<0b101, 0b111, "pack">;
 def UBFI : BFM_rii<0b101, 0b000, 0, "ubfi">;
 def SBFI : BFM_rii<0b101, 0b000, 1, "sbfi">;
 def UBFX : BFM_rii<0b101, 0b010, 0, "ubfx">;
 def SBFX : BFM_rii<0b101, 0b010, 1, "sbfx">;
 
-//Cond Move
-def MOVZ : CMOV_rr<0b100, 0b000, 0, "movz">;
-def MOVN : CMOV_rr<0b100, 0b001, 0, "movn">;
-
 //System Ctl
-def NOP : HINT<0b000, 0b000, "nop">;
-def WFI : HINT<0b000, 0b001, "wfi">;
-def WFE : HINT<0b000, 0b101, "wfe">;
-def UNIMP : HINT<0b001, 1, "unimp">,  Sched<[WriteBranch]>;
-def ECALL : HINT<0b001, 2, "ecall">,  Sched<[WriteBranch]>;
-def EBREAK : HINT<0b001, 3, "ebreak">, Sched<[WriteBranch]>;
+def NOP : HINT<0b000, 0b00000, "nop">;
+def WFI : HINT<0b000, 0b00001, "wfi">;
+def WFE : HINT<0b000, 0b00010, "wfe">;
+def WFM : HINT_ri<0b000, 0b00011, "wfm">;
 
-def MWAIT : HINT_ri<0b000, 0b011, "mwait">;
+def UNIMP  : HINT<0b001, 0b00001, "unimp">,  Sched<[WriteBranch]>;
+def EBREAK : HINT<0b001, 0b00010, "ebreak">, Sched<[WriteBranch]>;
+def ECALL  : HINT<0b001, 0b00011, "ecall">,  Sched<[WriteBranch]>;
 
 def ADJCALLSTACKUP : Pseudo<(outs), (ins i16imm:$amt1, i16imm:$amt2),
                      "!ADJCALLSTACKUP", "$amt1",
@@ -483,12 +491,12 @@ def ERET : FMT_J<0b110, 0b00000, (outs), (ins),
 //===----------------------------------------------------------------------===//
 let isBarrier = 1, isBranch = 1, isTerminator = 1 in
 def PseudoBR : Pseudo<(outs), (ins simm25_jump:$imm25), "", "", [(br bb:$imm25)]>,
-                PseudoInstExpansion<(B simm25_jump:$imm25)>;  //jump flag => B offset(flag)
+                PseudoInstExpansion<(B simm25_jump:$imm25)>;  //jump flag => b offset(flag)
 
 let isBarrier = 1, isBranch = 1, isIndirectBranch = 1, isTerminator = 1 in
 def PseudoBRIND : Pseudo<(outs), (ins IntRegs:$rb, simm20_brind:$imm20), "", "", []>,
                 PseudoInstExpansion<(BR IntRegs:$rb, simm20_brind:$imm20)>;
-                                                              //brind jt  => BR $rb(flag), offset(flag)
+                                                              //brind jt  => br $rb(flag), offset(flag)
 
 def CBZ  : CondB_ri<0b001, "bc.ez">;
 def CBNZ : CondB_ri<0b101, "bc.nz">;
@@ -501,34 +509,34 @@ def CBLE : CondB_ri<0b111, "bc.le">;
 // Instructions related to Symbols, which need expand and fixup.
 //===----------------------------------------------------------------------===//
 // Expanded(expand at emit level, and share one fixup) at XXXMCCodeEmitter.cpp
-let isBarrier = 1, isBranch = 1, isIndirectBranch = 1, isTerminator = 1, Size = 8 in
-def PseudoJump : Pseudo<(outs), (ins call_symbol:$dst),       //which is rare in use
+let isBranch = 1, isIndirectBranch = 1, isTerminator = 1, isCodeGenOnly = 0, isBarrier = 1, Size = 8 in
+def PseudoJump : Pseudo<(outs), (ins call_symbol:$dst),
                 "jmp", "$dst", []>,
-                Sched<[WriteBranch, ReadBranch]>;             //brind sym  => BR (AUIPC %hi(sym)), %lo(sym),   relax to BR X0, offset(sym)
+                Sched<[WriteBranch, ReadBranch]>;             //brind sym  => br  (pcadd20i %hi(sym)), %lo(sym),  relax to br X0, offset(sym)
                                                               // formed by insertIndirectBranch, expanded by expandFunctionCall
-let isCall = 1, Size = 8 in
+let isCall = 1, isCodeGenOnly = 0, Size = 8 in
 def PseudoCall : Pseudo<(outs), (ins call_symbol:$dst),
                 "call", "$dst", []>,
-                Sched<[WriteIALU, WriteBranch]>;              //call sym   => BLR (AUIPC %hi(sym)), %lo(sym),  relax to BL offset(sym)
+                Sched<[WriteIALU, WriteBranch]>;              //call sym   => blr (pcadd20i %hi(sym)), %lo(sym),  relax to bl offset(sym)
 let isCall = 1 in
 def PseudoCallIndirect : Pseudo<(outs), (ins IntRegs:$rb), "", "",
                 [(sodium_call IntRegs:$rb)]>,
-                PseudoInstExpansion<(BLR IntRegs:$rb, 0)>;    //call (sym) => BLR $rb(sym), 0
+                PseudoInstExpansion<(BLR IntRegs:$rb, 0)>;    //call (sym) => blr $rb(sym), 0
 
-let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Size = 8 in
+let isCall = 1, isReturn = 1, isTerminator = 1, isCodeGenOnly = 0, isBarrier = 1, Size = 8 in
 def PseudoTail : Pseudo<(outs), (ins call_symbol:$dst),
                 "tail", "$dst", []>,
-                 Sched<[WriteIALU, WriteBranch, ReadBranch]>; //tail sym   => BLR (AUIPC %hi(sym)), %lo(sym),  relax to BL offset(sym)
+                 Sched<[WriteIALU, WriteBranch, ReadBranch]>; //tail sym   => blr (pcadd20i %hi(sym)), %lo(sym),  relax to bl offset(sym)
 
-let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1 in
+let isCall = 1, isReturn = 1, isTerminator = 1, isBarrier = 1 in
 def PseudoTailIndirect : Pseudo<(outs), (ins IntRegs:$rb), "", "",
                 [(sodium_tail IntRegs:$rb)]>,
-                PseudoInstExpansion<(BLR IntRegs:$rb, 0)>;    //tail (sym) => BLR $rb(sym), 0
+                PseudoInstExpansion<(BLR IntRegs:$rb, 0)>;    //tail (sym) => blr $rb(sym), 0
 
 // Expanded at XXXExpandPseudoInsts.cpp
-let Size = 8 in {
+let isCodeGenOnly = 0, Size = 8 in {
 def PseudoLA : Pseudo<(outs IntRegs:$dst), (ins bare_symbol:$src),
-                "la", "$dst, $src", []>;                     //lla sym    => ADDI (AUIPC %hi(sym)), %lo(sym)
+                "la", "$dst, $src", []>;                      //la sym     => addi (pcadd12i %hi(sym)), %lo(sym)
 }
 
 //===----------------------------------------------------------------------===//
@@ -539,7 +547,7 @@ def PseudoLA : Pseudo<(outs IntRegs:$dst), (ins bare_symbol:$src),
 // expansion, prefix the class name, e.g. ccBrPats.
 //===----------------------------------------------------------------------===//
 //Immediate
-def : Pat<(i16 uimm20_li16:$imm20), (LI uimm20_li16:$imm20)>;
+def : Pat<(i16 uimm20:$imm20), (LI uimm20:$imm20)>;
 
 //Branch Indirect Pattern
 def : Pat<(brind IntRegs:$rb), (PseudoBRIND IntRegs:$rb, 0)>;

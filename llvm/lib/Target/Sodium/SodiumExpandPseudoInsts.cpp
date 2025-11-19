@@ -96,24 +96,30 @@ bool SodiumExpandPseudo::expandLoadLocalAddress(
   MachineFunction *MF = MBB.getParent();
 
   Register DestReg = MI.getOperand(0).getReg();
-  Register ScratchReg =
-    MF->getRegInfo().createVirtualRegister(&Sodium::IntRegsRegClass);
-
   MachineOperand &Symbol = MI.getOperand(1);
-  Symbol.setTargetFlags(SODIUMII::MO_PCREL_HI);
-  MCSymbol *AUIPCSymbol = MF->getContext().createNamedTempSymbol("pcrel_hi");
 
-  MachineInstr *MIAUIPC =
-    BuildMI(MBB, MBBI, DL, TII->get(Sodium::AUIPC), ScratchReg).add(Symbol);
-  MIAUIPC->setPreInstrSymbol(*MF, AUIPCSymbol);
+  if (MF->getSubtarget<SodiumSubtarget>().is32Bit) {
+    //pcaddi
+    BuildMI(MBB, MBBI, DL, TII->get(Sodium::PCADDI), DestReg)
+      .addDisp(Symbol, 0, SODIUMII::MO_PCREL_ADD);
+  } else {
+    //pcadd12i + addi
+    Register ScratchReg =
+      MF->getRegInfo().createVirtualRegister(&Sodium::IntRegsRegClass);
+    MCSymbol *AUIPCSymbol = MF->getContext().createNamedTempSymbol("pcrel_hi");
 
-  MachineInstr *SecondMI =
-    BuildMI(MBB, MBBI, DL, TII->get(Sodium::ADDI), DestReg)
-    .addReg(ScratchReg)
-    .addSym(AUIPCSymbol, SODIUMII::MO_PCREL_LO);
+    MachineInstr *MIAUIPC =
+      BuildMI(MBB, MBBI, DL, TII->get(Sodium::PCADD12I), ScratchReg)
+      .addDisp(Symbol, 0, SODIUMII::MO_PCREL_ADD12);
+    MIAUIPC->setPreInstrSymbol(*MF, AUIPCSymbol);
+    MachineInstr *SecondMI =
+      BuildMI(MBB, MBBI, DL, TII->get(Sodium::ADDI), DestReg)
+      .addReg(ScratchReg)
+      .addSym(AUIPCSymbol, SODIUMII::MO_PCREL_LO);
 
-  if (MI.hasOneMemOperand())
-    SecondMI->addMemOperand(*MF, *MI.memoperands_begin());
+    if (MI.hasOneMemOperand())
+      SecondMI->addMemOperand(*MF, *MI.memoperands_begin());
+  }
 
   MI.eraseFromParent();
   return true;

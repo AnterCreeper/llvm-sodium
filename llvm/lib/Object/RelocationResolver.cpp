@@ -604,27 +604,25 @@ static bool supportsSodium(uint64_t Type) {
 
 static uint64_t resolveSodium(uint64_t Type, uint64_t Offset, uint64_t S,
                               uint64_t LocData, int64_t Addend) {
-  int64_t RA = Addend;
-  uint64_t A = LocData;
   switch (Type) {
   case ELF::R_SODIUM_NONE:
     return LocData;
   case ELF::R_SODIUM_16:
-    return (S + RA) & 0xFFFF;
+    return (S + Addend) & 0xFFFF;
   case ELF::R_SODIUM_32:
-    return (S + RA) & 0xFFFFFFFF;
+    return (S + Addend) & 0xFFFFFFFF;
   case ELF::R_SODIUM_ADD8:
-    return (A + (S + RA)) & 0xFF;
+    return (LocData + (S + Addend)) & 0xFF;
   case ELF::R_SODIUM_SUB8:
-    return (A - (S + RA)) & 0xFF;
+    return (LocData - (S + Addend)) & 0xFF;
   case ELF::R_SODIUM_ADD16:
-    return (A + (S + RA)) & 0xFFFF;
+    return (LocData + (S + Addend)) & 0xFFFF;
   case ELF::R_SODIUM_SUB16:
-    return (A - (S + RA)) & 0xFFFF;
+    return (LocData - (S + Addend)) & 0xFFFF;
   case ELF::R_SODIUM_ADD32:
-    return (A + (S + RA)) & 0xFFFFFFFF;
+    return (LocData + (S + Addend)) & 0xFFFFFFFF;
   case ELF::R_SODIUM_SUB32:
-    return (A - (S + RA)) & 0xFFFFFFFF;
+    return (LocData - (S + Addend)) & 0xFFFFFFFF;
   default:
     llvm_unreachable("Invalid relocation type");
   }

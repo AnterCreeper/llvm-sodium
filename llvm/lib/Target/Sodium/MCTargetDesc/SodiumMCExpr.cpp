@@ -40,14 +40,18 @@ StringRef SodiumMCExpr::getVariantKindName(VariantKind Kind) {
     llvm_unreachable("Invalid ELF symbol kind");
   case VK_SODIUM_CALL:
     return "call";
-  case VK_SODIUM_LO:
+  case VK_SODIUM_LO16:
     return "lo";
+  case VK_SODIUM_HI16:
+    return "hi";
   case VK_SODIUM_PCREL_LO:
     return "pcrel_lo";
-  case VK_SODIUM_HI:
-    return "hi";
-  case VK_SODIUM_PCREL_HI:
+  case VK_SODIUM_PCREL_ADD:
     return "pcrel_hi";
+  case VK_SODIUM_PCREL_ADD12:
+    return "pcrel_hi12";
+  case VK_SODIUM_PCREL_ADD20:
+    return "pcrel_hi20";
   }
   llvm_unreachable("Invalid ELF symbol kind");
   return "";
@@ -55,10 +59,12 @@ StringRef SodiumMCExpr::getVariantKindName(VariantKind Kind) {
 
 SodiumMCExpr::VariantKind SodiumMCExpr::getVariantKindForName(StringRef name) {
   return StringSwitch<SodiumMCExpr::VariantKind>(name)
-  .Case("lo", VK_SODIUM_LO)
-  .Case("hi", VK_SODIUM_HI)
+  .Case("lo", VK_SODIUM_LO16)
+  .Case("hi", VK_SODIUM_HI16)
   .Case("pcrel_lo", VK_SODIUM_PCREL_LO)
-  .Case("pcrel_hi", VK_SODIUM_PCREL_HI)
+  .Case("pcrel_hi", VK_SODIUM_PCREL_ADD)
+  .Case("pcrel_hi12", VK_SODIUM_PCREL_ADD12)
+  .Case("pcrel_hi20", VK_SODIUM_PCREL_ADD20)
   .Default(VK_SODIUM_Invalid);
 }
 
@@ -77,8 +83,10 @@ void SodiumMCExpr::printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const {
 bool SodiumMCExpr::evaluateAsConstant(int64_t &Res) const {
   MCValue Value;
 
-  if (Kind == VK_SODIUM_CALL ||
-      Kind == VK_SODIUM_PCREL_LO || Kind == VK_SODIUM_PCREL_HI)
+  if (Kind == VK_SODIUM_CALL || Kind == VK_SODIUM_PCREL_LO ||
+      Kind == VK_SODIUM_PCREL_ADD ||
+      Kind == VK_SODIUM_PCREL_ADD12 ||
+      Kind == VK_SODIUM_PCREL_ADD20)
     return false;
 
   if (!getSubExpr()->evaluateAsRelocatable(Value, nullptr, nullptr))
@@ -91,10 +99,12 @@ bool SodiumMCExpr::evaluateAsConstant(int64_t &Res) const {
   switch (Kind) {
   default:
     llvm_unreachable("Invalid kind");
-  case VK_SODIUM_LO:
+  case VK_SODIUM_LO16:
     Res = GETBITS(Imm, 0,  15);
-  case VK_SODIUM_HI:
+    break;
+  case VK_SODIUM_HI16:
     Res = GETBITS(Imm, 16, 31);
+    break;
   }
   return true;
 }

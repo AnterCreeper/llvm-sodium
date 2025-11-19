@@ -23,8 +23,6 @@ namespace targets {
 
 // Sodium Target
 class SodiumTargetInfo : public TargetInfo {
-  static const Builtin::Info BuiltinInfo[];
-
 public:
   SodiumTargetInfo(const llvm::Triple &Triple, const TargetOptions &)
       : TargetInfo(Triple) {

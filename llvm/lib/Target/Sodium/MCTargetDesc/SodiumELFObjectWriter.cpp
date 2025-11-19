@@ -63,7 +63,6 @@ unsigned SodiumELFObjectWriter::getRelocType(MCContext &Ctx,
   default:
     Ctx.reportError(Fixup.getLoc(), "unsupported relocation type");
     return ELF::R_SODIUM_NONE;
-  case FK_Data_1:                     return ELF::R_SODIUM_8;
   case FK_Data_2:                     return ELF::R_SODIUM_16;
   case FK_Data_4:                     return ELF::R_SODIUM_32;
   case Sodium::fixup_sodium_add_8:    return ELF::R_SODIUM_ADD8;
@@ -72,17 +71,18 @@ unsigned SodiumELFObjectWriter::getRelocType(MCContext &Ctx,
   case Sodium::fixup_sodium_sub_16:   return ELF::R_SODIUM_SUB16;
   case Sodium::fixup_sodium_add_32:   return ELF::R_SODIUM_ADD32;
   case Sodium::fixup_sodium_sub_32:   return ELF::R_SODIUM_SUB32;
-  case Sodium::fixup_sodium_call:     return ELF::R_SODIUM_CALL;
-  case Sodium::fixup_sodium_hi19:     return ELF::R_SODIUM_HI19;
-  case Sodium::fixup_sodium_pcrel_hi19:   return ELF::R_SODIUM_PCREL_HI19;
-  case Sodium::fixup_sodium_lo13:     return ELF::R_SODIUM_LO13;
-  case Sodium::fixup_sodium_lo13s:    return ELF::R_SODIUM_LO13S;
-  case Sodium::fixup_sodium_pcrel_lo13:   return ELF::R_SODIUM_PCREL_LO13;
-  case Sodium::fixup_sodium_pcrel_lo13s:  return ELF::R_SODIUM_PCREL_LO13S;
   case Sodium::fixup_sodium_brcc20:
   case Sodium::fixup_sodium_brind20:  return ELF::R_SODIUM_BR20;
   case Sodium::fixup_sodium_jump25:   return ELF::R_SODIUM_BR25;
+  case Sodium::fixup_sodium_call:     return ELF::R_SODIUM_CALL;
   case Sodium::fixup_sodium_relax:    return ELF::R_SODIUM_RELAX;
+  case Sodium::fixup_sodium_hi16:     return ELF::R_SODIUM_HI16;
+  case Sodium::fixup_sodium_lo16:     return ELF::R_SODIUM_LO16;
+  case Sodium::fixup_sodium_pcrel_add:    return ELF::R_SODIUM_PCREL_ADD;
+  case Sodium::fixup_sodium_pcrel_add12:  return ELF::R_SODIUM_PCREL_ADD12;
+  case Sodium::fixup_sodium_pcrel_add20:  return ELF::R_SODIUM_PCREL_ADD20;
+  case Sodium::fixup_sodium_pcrel_lo13i:  return ELF::R_SODIUM_PCREL_LO13I;
+  case Sodium::fixup_sodium_pcrel_lo13l:  return ELF::R_SODIUM_PCREL_LO13L;
   }
   return ELF::R_SODIUM_NONE;
 }

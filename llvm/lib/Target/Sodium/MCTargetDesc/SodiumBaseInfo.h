@@ -31,10 +31,12 @@ namespace SODIUMII {
 enum {
   MO_None = 0,
   MO_CALL = 1,
-  MO_LO = 2,
-  MO_HI = 3,
+  MO_LO16 = 2,
+  MO_HI16 = 3,
   MO_PCREL_LO = 4,
-  MO_PCREL_HI = 5,
+  MO_PCREL_ADD = 5,
+  MO_PCREL_ADD12 = 6,
+  MO_PCREL_ADD20 = 7,
 };
 
 enum {

@@ -34,8 +34,8 @@ SDValue SodiumTargetLowering::getAddr(NodeTy *N, SelectionDAG &DAG,
   }
 
   //NonPIC Address
-  SDValue AddrHi = getTargetNode(N, DL, Ty, DAG, SODIUMII::MO_HI);
-  SDValue AddrLo = getTargetNode(N, DL, Ty, DAG, SODIUMII::MO_LO);
+  SDValue AddrHi = getTargetNode(N, DL, Ty, DAG, SODIUMII::MO_HI16);
+  SDValue AddrLo = getTargetNode(N, DL, Ty, DAG, SODIUMII::MO_LO16);
 
   bool is32Bit = Subtarget.is32Bit;
   if (is32Bit) {

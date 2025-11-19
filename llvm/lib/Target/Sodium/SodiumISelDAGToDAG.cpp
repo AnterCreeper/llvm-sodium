@@ -68,6 +68,16 @@ void SodiumDAGToDAGISel::Select(SDNode *Node) {
 
   switch (Node->getOpcode()) {
     default: break;
+  case ISD::Constant: {
+    auto *ConstNode = cast<ConstantSDNode>(Node);
+    if (ConstNode->isZero()) {
+      SDValue New =
+        CurDAG->getCopyFromReg(CurDAG->getEntryNode(), DL, Sodium::X0, VT);
+      ReplaceNode(Node, New.getNode());
+      return;
+    }
+    break;
+  }
   case ISD::FrameIndex: {
     SDValue Imm = CurDAG->getTargetConstant(0, DL, MVT::i32);
     int FI = cast<FrameIndexSDNode>(Node)->getIndex();

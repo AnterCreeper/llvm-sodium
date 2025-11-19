@@ -87,8 +87,8 @@ void SodiumMCCodeEmitter::expandFunctionCall(const MCInst &MI,
 
   const MCExpr *CallExpr = Func.getExpr();
 
-  // Emit auipc $ra, $func with R_SODIUM_CALL relocation type.
-  TmpInst = MCInstBuilder(Sodium::AUIPC).addReg(Sodium::X2).addExpr(CallExpr);
+  // Emit pcadd20i $ra, $func with R_SODIUM_CALL relocation type.
+  TmpInst = MCInstBuilder(Sodium::PCADD20I).addReg(Sodium::X2).addExpr(CallExpr);
   Binary = getBinaryCodeForInstr(TmpInst, Fixups, STI);
   support::endian::write(CB, Binary, support::little);
 
@@ -134,11 +134,9 @@ SodiumMCCodeEmitter::getExprOpValue(const MCInst &MI, const MCExpr *Expr,
                                     SmallVectorImpl<MCFixup> &Fixups,
                                     const MCSubtargetInfo &STI) const {
   unsigned MIFrm = SODIUMII::getFormat(MCII.get(MI.getOpcode()).TSFlags);
-  bool isFMT_I = MIFrm == SODIUMII::InstFMT_I;
-
-  MCExpr::ExprKind Kind = Expr->getKind();
 
   bool RelaxCandidate = false;
+  MCExpr::ExprKind Kind = Expr->getKind();
   Sodium::Fixups FixupKind = Sodium::fixup_sodium_invalid;
 
   if (Kind == MCExpr::Target) {
@@ -149,27 +147,34 @@ SodiumMCCodeEmitter::getExprOpValue(const MCInst &MI, const MCExpr *Expr,
     case SodiumMCExpr::VK_SODIUM_None:
     case SodiumMCExpr::VK_SODIUM_Invalid:
       llvm_unreachable("Invalid fixup kind!");
-    case SodiumMCExpr::VK_SODIUM_LO:
-      RelaxCandidate = true;
-      FixupKind = isFMT_I ? Sodium::Fixups::fixup_sodium_lo13
-                          : Sodium::Fixups::fixup_sodium_lo13s;
+    case SodiumMCExpr::VK_SODIUM_LO16:
+      FixupKind = Sodium::Fixups::fixup_sodium_lo16;
       break;
-    case SodiumMCExpr::VK_SODIUM_PCREL_LO:
-      RelaxCandidate = true;
-      FixupKind = isFMT_I ? Sodium::Fixups::fixup_sodium_pcrel_lo13
-                          : Sodium::Fixups::fixup_sodium_pcrel_lo13s;
+    case SodiumMCExpr::VK_SODIUM_HI16:
+      FixupKind = Sodium::Fixups::fixup_sodium_hi16;
       break;
-    case SodiumMCExpr::VK_SODIUM_HI:
-      RelaxCandidate = true;
-      FixupKind = Sodium::Fixups::fixup_sodium_hi19;
+    case SodiumMCExpr::VK_SODIUM_PCREL_ADD:
+      FixupKind = Sodium::Fixups::fixup_sodium_pcrel_add;
       break;
-    case SodiumMCExpr::VK_SODIUM_PCREL_HI:
+    case SodiumMCExpr::VK_SODIUM_PCREL_ADD12:
       RelaxCandidate = true;
-      FixupKind = Sodium::Fixups::fixup_sodium_pcrel_hi19;
+      FixupKind = Sodium::Fixups::fixup_sodium_pcrel_add12;
+      break;
+    case SodiumMCExpr::VK_SODIUM_PCREL_ADD20:
+      RelaxCandidate = true;
+      FixupKind = Sodium::Fixups::fixup_sodium_pcrel_add20;
       break;
     case SodiumMCExpr::VK_SODIUM_CALL:
       RelaxCandidate = true;
       FixupKind = Sodium::Fixups::fixup_sodium_call;
+      break;
+    case SodiumMCExpr::VK_SODIUM_PCREL_LO:
+      RelaxCandidate = true;
+      if      (MIFrm == SODIUMII::InstFMT_I)
+        FixupKind = Sodium::Fixups::fixup_sodium_pcrel_lo13i;
+      else if (MIFrm == SODIUMII::InstFMT_LS)
+        FixupKind = Sodium::Fixups::fixup_sodium_pcrel_lo13l;
+      else llvm_unreachable("unexpected MIFrm for VK_SODIUM_PCREL_LO");
       break;
     }
   } else

@@ -39,6 +39,7 @@ class Pseudo<dag outs, dag ins, string opcodestr = "", string argstr = "", list<
   : SodiumInst<outs, ins, opcodestr, argstr, pattern> {
   let opcode = 0b0000;
   let isCodeGenOnly = 1;
+  let isAsmParserOnly = 1;
 }  
 
 //===----------------------------------------------------------------------===//
@@ -189,17 +190,18 @@ class FMT_LS<bits<3> func3, bits<2> tag2, dag outs, dag ins, string opcodestr, s
   let Inst{8-4}   = imm13{5-1};
 }
 
-class FMT_SR<bits<3> func3, bits<2> tag2, bits<5> flag5, dag outs, dag ins, string opcodestr, string argstr>
+class FMT_SR<bits<3> func3, bits<2> tag2, dag outs, dag ins, string opcodestr, string argstr>
   : SodiumInst<outs, ins, opcodestr, argstr, []>
 {
   bits<13> imm13;
+  bits<5> pos5;
   bits<5> rs;
 
   let opcode      = 0b1101;
   let Inst{31-30} = tag2;
   let Inst{29}    = imm13{0};
   let Inst{28-22} = imm13{12-6};
-  let Inst{21-17} = flag5;
+  let Inst{21-17} = pos5;
   let Inst{16-12} = rs;
   let Inst{11-9}  = func3;
   let Inst{8-4}   = imm13{5-1};
@@ -224,17 +226,15 @@ class FMT_LRA<bits<3> func3, dag outs, dag ins, string opcodestr, string argstr>
 //===----------------------------------------------------------------------===//
 // FMT_HT(Hint)
 //===----------------------------------------------------------------------===//
-class FMT_HT<bits<3> func3, bits<3> tag3, bits<5> flag5, dag outs, dag ins, string opcodestr, string argstr>
+class FMT_HT<bits<3> func3, bits<5> tag5, dag outs, dag ins, string opcodestr, string argstr>
   : SodiumInst<outs, ins, opcodestr, argstr, []>
 {
-  bits<12> imm12;
+  bits<15> imm15;
   bits<5> rb;
 
   let opcode      = 0b0011;
-  let Inst{31-29} = tag3;
-  let Inst{28-22} = imm12{11-5};
-  let Inst{21-17} = flag5;
+  let Inst{31-17} = imm15{14-0};
   let Inst{16-12} = rb;
   let Inst{11-9}  = func3;
-  let Inst{8-4}   = imm12{4-0};
+  let Inst{8-4}   = tag5;
 }

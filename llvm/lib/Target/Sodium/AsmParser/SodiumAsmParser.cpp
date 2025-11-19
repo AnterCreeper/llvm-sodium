@@ -92,10 +92,11 @@ class SodiumAsmParser : public MCTargetAsmParser {
   /// in this method.
   bool processInstruction(MCInst &Inst, SMLoc IDLoc, OperandVector &Operands,
                           MCStreamer &Out);
-
+/*
   bool generateImmOutOfRangeError(OperandVector &Operands, uint64_t ErrorInfo,
                                   int64_t Lower, int64_t Upper,
                                   const Twine &Msg);
+*/
   bool generateImmOutOfRangeError(SMLoc ErrorLoc, int64_t Lower, int64_t Upper,
                                   const Twine &Msg);
 
@@ -135,12 +136,14 @@ bool SodiumAsmParser::generateImmOutOfRangeError(
   return Error(ErrorLoc, Msg + " [" + Twine(Lower) + ", " + Twine(Upper) + "]");
 }
 
+/*
 bool SodiumAsmParser::generateImmOutOfRangeError(
     OperandVector &Operands, uint64_t ErrorInfo, int64_t Lower, int64_t Upper,
     const Twine &Msg = "immediate must be an integer in the range") {
   SMLoc ErrorLoc = ((SodiumOperand &)*Operands[ErrorInfo]).getStartLoc();
   return generateImmOutOfRangeError(ErrorLoc, Lower, Upper, Msg);
 }
+*/
 
 #include "SodiumParseMethod.h"
 
@@ -385,7 +388,7 @@ void SodiumAsmParser::emitToStreamer(MCStreamer &S, const MCInst &Inst) {
 
 bool SodiumAsmParser::validateInstruction(MCInst &Inst,
                                           OperandVector &Operands) {
-  unsigned Opcode = Inst.getOpcode();
+  //unsigned Opcode = Inst.getOpcode();
   return false;
 }
 

@@ -202,17 +202,15 @@ public:
 
   bool isUImm4() const { return IsUImmN<4>(); }
 
-  bool isSImm13Lsb0() const
+  bool isSImm16Lsb0() const
     FUNC(SodiumAsmParser::classifySymbolRef(getImm(), VK),
-         (isShiftedInt<12, 1>(Imm)),
+         (isShiftedInt<15, 1>(Imm)),
          (IsConstantImm && (VK == SodiumMCExpr::VK_SODIUM_None)) ||
-         (VK == SodiumMCExpr::VK_SODIUM_LO) ||
          (VK == SodiumMCExpr::VK_SODIUM_PCREL_LO))
   bool isSImm13() const
     FUNC(SodiumAsmParser::classifySymbolRef(getImm(), VK),
          isInt<13>(Imm),
          (IsConstantImm && (VK == SodiumMCExpr::VK_SODIUM_None)) ||
-         (VK == SodiumMCExpr::VK_SODIUM_LO) ||
          (VK == SodiumMCExpr::VK_SODIUM_PCREL_LO))
 
   bool isUImm3Sub1() const
@@ -224,13 +222,16 @@ public:
     FUNC(SodiumAsmParser::classifySymbolRef(getImm(), VK),
          isUInt<16>(Imm),
          (IsConstantImm && (VK == SodiumMCExpr::VK_SODIUM_None)) ||
-         (VK == SodiumMCExpr::VK_SODIUM_HI))
+         (VK == SodiumMCExpr::VK_SODIUM_LO16) ||
+         (VK == SodiumMCExpr::VK_SODIUM_HI16))
 
   bool isUImm20LA() const
     FUNC(SodiumAsmParser::classifySymbolRef(getImm(), VK),
          isUInt<20>(Imm),
          (IsConstantImm && (VK == SodiumMCExpr::VK_SODIUM_None)) ||
-         (VK == SodiumMCExpr::VK_SODIUM_PCREL_HI))
+         (VK == SodiumMCExpr::VK_SODIUM_PCREL_ADD) ||
+         (VK == SodiumMCExpr::VK_SODIUM_PCREL_ADD12) ||
+         (VK == SodiumMCExpr::VK_SODIUM_PCREL_ADD20))
 
   // Used by the TableGen Code
   void addRegOperands(MCInst &Inst, unsigned N) const {
