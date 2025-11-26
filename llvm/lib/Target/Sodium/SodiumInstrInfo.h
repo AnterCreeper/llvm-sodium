@@ -58,6 +58,7 @@ public:
                         const DebugLoc &DL, int *BytesAdded) const override;
   unsigned removeBranch(MachineBasicBlock &MBB,
                         int *BytesRemoved = nullptr) const override;
+  bool reverseBranchCondition(SmallVectorImpl<MachineOperand> &Cond) const override;
 
   MachineBasicBlock *getBranchDestBlock(const MachineInstr &MI) const override {
     assert(MI.getDesc().isBranch() && "Unexpected opcode!");

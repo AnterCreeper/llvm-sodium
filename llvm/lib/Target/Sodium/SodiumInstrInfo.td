@@ -216,11 +216,11 @@ class Load_di<bits<3> func3, bits<2> tag2, string opcodestr>
 class Store_rri<bits<3> func3, bits<2> tag2, string opcodestr>
     : FMT_LS<func3, tag2, (outs), (ins IntRegs:$rs, MemRegs:$rb, simm13:$imm13),
               opcodestr, "$rs, ${imm13}(${rb})">,
-      Sched<[WriteStore, ReadStoreData, ReadMemBase]>;
+      Sched<[ReadStoreData, ReadMemBase]>;
 class Store_dri<bits<3> func3, bits<2> tag2, string opcodestr>
     : FMT_LS<func3, tag2, (outs), (ins IntPair:$rs, MemRegs:$rb, simm13:$imm13),
               opcodestr, "$rs, ${imm13}(${rb})">,
-      Sched<[WriteStore, ReadStoreData, ReadMemBase]>;
+      Sched<[ReadStoreData, ReadMemBase]>;
 
 class Cache_ri<bits<3> func3, bits<2> tag2, string opcodestr>
     : FMT_LS<func3, tag2, (outs), (ins MemRegs:$rb, simm13:$imm13),
@@ -732,13 +732,18 @@ def : Pat<(i16 (bswap (i16 IntRegs:$rs))), (ROLI IntRegs:$rs, 8)>;
 def : PatRegReg<sodium_tbe, TBE>;
 
 def zexti8 : ComplexPattern<i16, 1, "SelectZExtBits<8>">;
-def : Pat<(i16 (or (zexti8 (i16 IntRegs:$rs1)), (shl IntRegs:$rs2, (i16 8)))),
+def : Pat<(i16 (or (shl IntRegs:$rs1, (i16 8)), (zexti8 (i16 IntRegs:$rs2)))),
   (PACK IntRegs:$rs1, IntRegs:$rs2, 8)>;
 def : Pat<(i16 (sext_inreg IntRegs:$rs1, i8)), (SBFX IntRegs:$rs1, 0, 7)>;
 
 def : Pat<(i16 (and IntRegs:$rs1, (not IntRegs:$rs2))), (ANDN IntRegs:$rs1, IntRegs:$rs2)>;
 def : Pat<(i16 (or  IntRegs:$rs1, (not IntRegs:$rs2))), (ORN  IntRegs:$rs1, IntRegs:$rs2)>;
 def : Pat<(i16 (xor IntRegs:$rs1, (not IntRegs:$rs2))), (XNOR IntRegs:$rs1, IntRegs:$rs2)>;
+
+// intrinsic ref:
+//  llvm-project/llvm/include/llvm/IR/IntrinsicsSodium.td
+//  llvm-project/clang/include/clang/Basic/BuiltinsSodium.def
+def : Pat<(i16 (int_sodium_pack IntRegs:$rs1, IntRegs:$rs2, uimm4:$imm4)), (PACK IntRegs:$rs1, IntRegs:$rs2, uimm4:$imm4)>;
 
 //===----------------------------------------------------------------------===//
 // v2i16 codegen patterns

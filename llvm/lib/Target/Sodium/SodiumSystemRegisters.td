@@ -38,8 +38,11 @@ def lookupSysRegByName : SearchIndex {
 def : SysReg<"mvec", 0x0000>;
 def : SysReg<"mepc", 0x0001>;
 def : SysReg<"msta", 0x0002>;
-def : SysReg<"msca", 0x0003>;
+def : SysReg<"mask", 0x0003>;
+
 def : SysReg<"mcr0", 0x0010>;
 def : SysReg<"mcr1", 0x0011>;
 def : SysReg<"mcr2", 0x0012>;
 def : SysReg<"mcr3", 0x0013>;
+
+def : SysReg<"mstk", 0x0014>;

@@ -24,6 +24,6 @@ SodiumMCAsmInfo::SodiumMCAsmInfo(const Triple &TT) {
   AlignmentIsInBytes = false;
   SupportsDebugInformation = true;
   ExceptionsType = ExceptionHandling::DwarfCFI;
-  Data16bitsDirective = "\t.half\t";
-  Data32bitsDirective = "\t.word\t";
+  Data16bitsDirective = "\t.word\t";
+  Data32bitsDirective = "\t.dword\t";
 }

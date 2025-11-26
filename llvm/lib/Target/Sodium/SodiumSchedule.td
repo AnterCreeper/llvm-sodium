@@ -22,7 +22,6 @@ def WriteCSR        : SchedWrite;
 def ReadMemBase     : SchedRead;
 def ReadStoreData   : SchedRead;
 def WriteLoad       : SchedWrite;
-def WriteStore      : SchedWrite;
 
 def SodiumGenericModel : SchedMachineModel {
     let MicroOpBufferSize = 0;
@@ -48,7 +47,6 @@ def : WriteRes<WriteBranch, [SodiumUnitB]>;
 let Latency = 1 in {
 def : WriteRes<WriteIALU,   [SodiumUnitALU]>;
 def : WriteRes<WriteLoad,   [SodiumUnitMem]>;
-def : WriteRes<WriteStore,  [SodiumUnitMem]>;
 }
 
 let Latency = 3 in {
@@ -58,6 +56,6 @@ def : WriteRes<WriteCSR,    [SodiumUnitCsr]>;
 def : ReadAdvance<ReadIALU, 0>;
 def : ReadAdvance<ReadBranch, 0>;
 def : ReadAdvance<ReadCSR, 0>;
-def : ReadAdvance<ReadMemBase, 1>;
+def : ReadAdvance<ReadMemBase, 1, [WriteIALU, WriteLoad]>;
 def : ReadAdvance<ReadStoreData, 0>;
 }

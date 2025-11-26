@@ -52,8 +52,6 @@ private:
 
 char SodiumExpandPseudo::ID = 0;
 
-FunctionPass *createSodiumExpandPseudoPass() { return new SodiumExpandPseudo(); }
-
 bool SodiumExpandPseudo::runOnMachineFunction(MachineFunction &MF) {
   STI = &MF.getSubtarget<SodiumSubtarget>();
   TII = STI->getInstrInfo();

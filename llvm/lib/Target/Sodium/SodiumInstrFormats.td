@@ -160,11 +160,11 @@ class FMT_II<bits<3> func3, bits<3> tag3, bits<1> ifsigned, dag outs, dag ins, s
 
   let opcode      = 0b1111;
   let Inst{31-30} = tag3{2-1};
-  let Inst{29}    = len{0};   //imm[0]
+  let Inst{29}    = lsb{0};   //imm[0]
   let Inst{28}    = ifsigned; //imm[12]
-  let Inst{27-24} = lsb;      //imm[11:8]
+  let Inst{27-24} = len;      //imm[11:8]
   let Inst{23-20} = 0;        //imm[7:4]
-  let Inst{19-17} = len{3-1}; //imm[3:1]
+  let Inst{19-17} = lsb{3-1}; //imm[3:1]
   let Inst{16-12} = rs;
   let Inst{11-9}  = func3;
   let Inst{8-4}   = rd;

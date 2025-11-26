@@ -241,33 +241,33 @@ bool SodiumDAGToDAGISel::tryBitfieldInsertOpfromSHL(SelectionDAG *CurDAG, SDNode
   return false;
 }
 
-// pack $rd, $rs1, $rs2, $shamt => $rd = {$rs2[15-shamt:0], $rs1[$shamt-1:0]};
+// pack $rd, $rs1, $rs2, $shamt => $rd = {$rs1[15-shamt:0], $rs2[$shamt-1:0]};
 bool SodiumDAGToDAGISel::tryBitfieldPackfromOrSHL(SelectionDAG *CurDAG, SDNode *Node) {
   SDValue N0 = Node->getOperand(0);
   SDValue N1 = Node->getOperand(1);
 
-  //fold or (sll y, C1), x
+  //fold or (sll x, C1), y
   //  => pack x, y, C1
   SDValue X, Y;
-  if (N0.getOpcode() == ISD::SHL && N0.hasOneUse()) { X = N1;  Y = N0; }
+  if (N0.getOpcode() == ISD::SHL && N0.hasOneUse()) { X = N0;  Y = N1; }
   else
-  if (N1.getOpcode() == ISD::SHL && N1.hasOneUse()) { X = N0;  Y = N1; }
+  if (N1.getOpcode() == ISD::SHL && N1.hasOneUse()) { X = N1;  Y = N0; }
   else return false;
 
   SDLoc DL(Node);
   MVT VT = Node->getSimpleValueType(0);
 
-  auto *ShAmt = dyn_cast<ConstantSDNode>(Y->getOperand(1));
+  auto *ShAmt = dyn_cast<ConstantSDNode>(X->getOperand(1));
   if (!ShAmt)
     return false;
 
-  uint64_t NotKnownZero = (~CurDAG->computeKnownBits(X).Zero).getZExtValue();
+  uint64_t NotKnownZero = (~CurDAG->computeKnownBits(Y).Zero).getZExtValue();
   uint64_t Lsb = ShAmt->getZExtValue();
   if (NotKnownZero & maskTrailingZeros<uint64_t>(Lsb)) return false;
 
   ReplaceNode(Node, CurDAG->getMachineNode(Sodium::PACK, DL, VT,
-                                           X,
-                                           Y.getOperand(0),
+                                           X.getOperand(0),
+                                           Y,
                                            CurDAG->getTargetConstant(Lsb, DL, VT)));
   return true;
 }

@@ -11,7 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-BUILTIN(__builtin_sodium_tbe, "UiUiUi", "nc")
+BUILTIN(__builtin_sodium_tbe,  "UiUiUi",    "nc")
+BUILTIN(__builtin_sodium_pack, "UiUiUiIUi", "nc")
 
 #undef BUILTIN
 #undef TARGET_BUILTIN

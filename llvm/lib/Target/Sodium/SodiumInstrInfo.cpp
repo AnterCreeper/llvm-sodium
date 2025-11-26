@@ -133,6 +133,35 @@ void SodiumInstrInfo::instantiateCondBranch(MachineBasicBlock &MBB,
   BuildMI(&MBB, DL, get(Cond[0].getImm())).add(Cond[1]).addMBB(TBB);
 }
 
+bool SodiumInstrInfo::reverseBranchCondition(SmallVectorImpl<MachineOperand> &Cond) const {
+  unsigned CC = Cond[0].getImm();
+  switch (CC) {
+  default:
+    llvm_unreachable("Unrecognized conditional branch");
+  case Sodium::CBZ:
+    CC = Sodium::CBNZ;
+    break;
+  case Sodium::CBNZ:
+    CC = Sodium::CBZ;
+    break;
+  case Sodium::CBGE:
+    CC = Sodium::CBLT;
+    break;
+  case Sodium::CBLT:
+    CC = Sodium::CBGE;
+    break;
+  case Sodium::CBGT:
+    CC = Sodium::CBLE;
+    break;
+  case Sodium::CBLE:
+    CC = Sodium::CBGT;
+    break;
+  }
+  // ref: void parseCondBranch();
+  Cond[0].setImm(CC);
+  return false;
+}
+
 bool SodiumInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
                                     MachineBasicBlock *&TBB,
                                     MachineBasicBlock *&FBB,
@@ -190,6 +219,12 @@ bool SodiumInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
   }
 
   // Handle a conditional branch followed by an unconditional branch.
+  // e.g. bc.cc x, _flag0
+  //      b     _flag1
+  //      flag0:
+  // =>
+  //      bc.nc x, _flag1
+  //      flag0:
   if (NumTerminators == 2 && std::prev(I)->getDesc().isConditionalBranch() &&
       I->getDesc().isUnconditionalBranch()) {
     parseCondBranch(*std::prev(I), TBB, Cond);
@@ -275,7 +310,7 @@ void SodiumInstrInfo::movImm(MachineBasicBlock &MBB,
                              const DebugLoc &DL, Register DstReg, uint64_t Val,
                              MachineInstr::MIFlag Flag, bool is32Bit) const {
   int64_t Lo16 = GETBITS(Val, 0, 15);
-  int64_t Hi16 = GETBITS(Val, 16, 31);
+  //int64_t Hi16 = GETBITS(Val, 16, 31);
   BuildMI(MBB, MBBI, DL, get(Sodium::LI), DstReg)
       .addImm(Lo16)
       .setMIFlag(Flag);

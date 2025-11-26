@@ -60,28 +60,30 @@ BitVector SodiumRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
 
   BitVector Reserved(getNumRegs());
   // Use markSuperRegs to ensure any register aliases are also reserved
-  markSuperRegs(Reserved, Sodium::X0); // zero
-  markSuperRegs(Reserved, Sodium::X2); // ra
-  markSuperRegs(Reserved, Sodium::X4); // sp
-  markSuperRegs(Reserved, Sodium::X6); // gp
+  markSuperRegs(Reserved, Sodium::X0);  //zero
+  markSuperRegs(Reserved, Sodium::X1);  //FIXME, t5
+  markSuperRegs(Reserved, Sodium::X2);  //ra
+  markSuperRegs(Reserved, Sodium::X3);  //r0
+  markSuperRegs(Reserved, Sodium::X4);  //sp
+  markSuperRegs(Reserved, Sodium::X5);  //r1
+  markSuperRegs(Reserved, Sodium::X6);  //gp
   if(Subtarget.is32Bit) {
-  markSuperRegs(Reserved, Sodium::X3); // ra
-  markSuperRegs(Reserved, Sodium::X5); // sp
-  markSuperRegs(Reserved, Sodium::X7); // gp
-  }
-  if (TFI->hasFP(MF)) {
-  markSuperRegs(Reserved, Sodium::X8); // fp
-  if(Subtarget.is32Bit)
-  markSuperRegs(Reserved, Sodium::X9); // fp
+  markSuperRegs(Reserved, Sodium::X7);  //t4
   }
   // Also reserve the register pair aliases covering the above
   // registers, with the same conditions.
-  markSuperRegs(Reserved, Sodium::D0); // zero32
-  markSuperRegs(Reserved, Sodium::D1); // ra32
-  markSuperRegs(Reserved, Sodium::D2); // sp32
-  markSuperRegs(Reserved, Sodium::D3); // gp32
+  markSuperRegs(Reserved, Sodium::D0);  //zero
+  markSuperRegs(Reserved, Sodium::D1);  //ra32
+  markSuperRegs(Reserved, Sodium::D2);  //sp32
+  markSuperRegs(Reserved, Sodium::D3);  //gp32
+  // If have Frame Pointer, reversed it
   if (TFI->hasFP(MF)) {
-  markSuperRegs(Reserved, Sodium::D4); // fp32
+    markSuperRegs(Reserved, Sodium::X8);  // fp(s0)
+    if(Subtarget.is32Bit)
+      markSuperRegs(Reserved, Sodium::X9);  // s1
+  }
+  if (TFI->hasFP(MF)) {
+  markSuperRegs(Reserved, Sodium::D4);  // fp32
   }
 
   assert(checkAllSuperRegsMarked(Reserved));

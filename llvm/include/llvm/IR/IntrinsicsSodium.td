@@ -11,10 +11,15 @@
 //===----------------------------------------------------------------------===//
 
 let TargetPrefix = "sodium" in {
-  def int_sodium_tbe : ClangBuiltin<"__builtin_sodium_tbe">,
+  // T @llvm.<name>.i16.<p>(i16, i16);
+  def int_sodium_tbe  : ClangBuiltin<"__builtin_sodium_tbe">,
     DefaultAttrsIntrinsic<[llvm_i16_ty], [llvm_i16_ty, llvm_i16_ty], [IntrNoMem]>;
+  // T @llvm.<name>.i16.<p>(i16, i16, imm);
+  def int_sodium_pack : ClangBuiltin<"__builtin_sodium_pack">,
+    DefaultAttrsIntrinsic<[llvm_i16_ty], [llvm_i16_ty, llvm_i16_ty, llvm_i16_ty], [IntrNoMem, ImmArg<ArgIndex<2>>]>;
 }
 
+//internal intrinsics
 let TargetPrefix = "sodium" in {
   def int_sodium_mul32  : Intrinsic<[llvm_v2i16_ty], [llvm_i16_ty, llvm_i16_ty], [IntrNoMem]>;
   def int_sodium_mulu32 : Intrinsic<[llvm_v2i16_ty], [llvm_i16_ty, llvm_i16_ty], [IntrNoMem]>;

@@ -159,8 +159,8 @@ void SodiumFrameLowering::emitPrologue(MachineFunction &MF,
 void SodiumFrameLowering::emitEpilogue(MachineFunction &MF,
                                        MachineBasicBlock &MBB) const {
   const SodiumSubtarget &ST = MF.getSubtarget<SodiumSubtarget>();
-  const SodiumInstrInfo &TII =
-    *static_cast<const SodiumInstrInfo *>(STI.getInstrInfo());
+  //const SodiumInstrInfo &TII =
+  //  *static_cast<const SodiumInstrInfo *>(STI.getInstrInfo());
 
   // All calls are tail calls in GHC calling conv, and functions have no
   // prologue/epilogue.

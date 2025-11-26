@@ -75,7 +75,7 @@ let RegAltNameIndices = [ABIRegAltName] in {
 // Pairs of Integer registers
 let RegAltNameIndices = [ABIRegAltName] in {
   let isConstant = true in
-  def D0: SodiumGPRPair<0, "d0", ["zero32"], [X0, X1]>;
+  def D0: SodiumGPRPair<0, "d0", ["zero"], [X0, X1]>;
   def D1: SodiumGPRPair<2, "d1", ["ra32"], [X2, X3]>;
   def D2 : SodiumGPRPair<4, "d2", ["sp32"], [X4, X5]>;
   def D3 : SodiumGPRPair<6, "d3", ["gp32"], [X6, X7]>;
@@ -98,16 +98,17 @@ let RegAltNameIndices = [ABIRegAltName] in {
 def IntRegs : RegisterClass<"Sodium", [i16], 16,
                             (add (sequence "X%u", 10, 17),  //a0-a7
                                  (sequence "X%u", 28, 31),  //t0-t3
+                                 X7, X1,                    //t4-t5
                                  (sequence "X%u", 8, 9),    //s0-s1
                                  (sequence "X%u", 18, 27),  //s2-s11
-                                 (sequence "X%u", 0, 7))>;  //zero, ra, sp, tp
+                                 X0, X2, X3, X4, X5, X6)>;  //zero, ra, r0, sp, r1, gp
 
 def IntPair : RegisterClass<"Sodium", [v2i16], 32,
-                            (add (sequence "D%u", 5, 8),    //a0-a7
-                                  D14, D15,                 //t0-t3
-                                  D4,                       //s0-s1
-                                 (sequence "D%u", 9, 13),   //s2-s11
-                                 (sequence "D%u", 0, 3))>;  //zero, ra, sp, tp
+                            (add (sequence "D%u", 5, 8),    //a0-a6
+                                 D14, D15,                  //t0-t2
+                                 D4,                        //s0
+                                 (sequence "D%u", 9, 13),   //s2-s10
+                                 (sequence "D%u", 0, 3))>;  //zero, ra32, sp32, gp32
 
 def RegsNoX0 : RegisterClass<"Sodium", [i16], 16, (sub IntRegs, X0)>;
 def PairNoX0 : RegisterClass<"Sodium", [v2i16], 32, (sub IntPair, D0)>;

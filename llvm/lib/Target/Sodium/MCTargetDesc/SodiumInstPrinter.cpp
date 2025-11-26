@@ -59,7 +59,7 @@ bool SodiumInstPrinter::applyTargetSpecificCLOption(StringRef Opt) {
 }
 
 void SodiumInstPrinter::printRegName(raw_ostream &OS, MCRegister Reg) const {
-  OS << "$" << StringRef(getRegisterName(Reg)).lower();
+  OS << StringRef(getRegisterName(Reg)).lower();
 }
 
 void SodiumInstPrinter::printInst(const MCInst *MI, uint64_t Address,
@@ -94,8 +94,6 @@ void SodiumInstPrinter::printBranchOperand(const MCInst *MI, uint64_t Address,
     return printOperand(MI, OpNo, STI, O);
   if (PrintBranchImmAsAddress) {
     uint64_t Target = Address + MO.getImm();
-    if (!STI.hasFeature(Sodium::Feature32Bit))
-      Target &= 0xffff;
     O << formatHex(Target);
   } else {
     O << MO.getImm();
