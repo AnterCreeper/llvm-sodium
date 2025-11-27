@@ -70,7 +70,7 @@ bool SodiumDAGToDAGISel::tryBitfieldOpfromSHR(SelectionDAG *CurDAG, SDNode *Node
     if (!IS_SHIFTED_MASK(Mask, Lsb)) return false;
     if (Lsb != RightShAmt) return false;
 
-    const unsigned Len = llvm::bit_width(Mask) - Lsb;
+    const unsigned Len = llvm::bit_width(Mask) - Lsb - 1;
     bool needSigned = isSigned && ((unsigned)llvm::bit_width(Mask) == VT.getSizeInBits());
     ReplaceNode(Node, BitfieldExtract(CurDAG, X, Lsb, Len, DL, VT, needSigned).getNode());
     return true;
@@ -264,6 +264,12 @@ bool SodiumDAGToDAGISel::tryBitfieldPackfromOrSHL(SelectionDAG *CurDAG, SDNode *
   uint64_t NotKnownZero = (~CurDAG->computeKnownBits(Y).Zero).getZExtValue();
   uint64_t Lsb = ShAmt->getZExtValue();
   if (NotKnownZero & maskTrailingZeros<uint64_t>(Lsb)) return false;
+
+  //try remove (and y, mask)
+  if (Y.getOpcode() == ISD::AND) {
+    auto *Mask = dyn_cast<ConstantSDNode>(Y->getOperand(1));
+    if (Mask && (uint64_t)llvm::countr_zero(Mask->getZExtValue() + 1) == Lsb) Y = Y->getOperand(0);
+  }
 
   ReplaceNode(Node, CurDAG->getMachineNode(Sodium::PACK, DL, VT,
                                            X.getOperand(0),

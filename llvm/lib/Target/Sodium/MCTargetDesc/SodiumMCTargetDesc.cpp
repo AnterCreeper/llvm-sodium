@@ -54,9 +54,10 @@ static MCSubtargetInfo *createSodiumMCSubtargetInfo(const Triple &TT,
   return createSodiumMCSubtargetInfoImpl(TT, CPU, /*TuneCPU*/ CPU, FS); //defined in generated SodiumGenSubtargetInfo.inc
 }
 
+template <bool M32>
 static MCAsmInfo *createSodiumMCAsmInfo(const MCRegisterInfo &MRI,
                                         const Triple &TT, const MCTargetOptions &Options) {
-  MCAsmInfo *MAI = new SodiumMCAsmInfo(TT);
+  MCAsmInfo *MAI = new SodiumMCAsmInfo(TT, M32);
   unsigned SP = MRI.getDwarfRegNum(Sodium::X4, true);
   MCCFIInstruction Inst = MCCFIInstruction::createDefCfaRegister(nullptr, SP);
   MAI->addInitialFrameState(Inst);
@@ -76,9 +77,10 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeSodiumTargetMC() {
     TargetRegistry::RegisterMCRegInfo(*T, createSodiumMCRegisterInfo);
     TargetRegistry::RegisterMCInstrInfo(*T, createSodiumMCInstrInfo);
     TargetRegistry::RegisterMCSubtargetInfo(*T, createSodiumMCSubtargetInfo);
-    TargetRegistry::RegisterMCAsmInfo(*T, createSodiumMCAsmInfo);
     TargetRegistry::RegisterMCInstPrinter(*T, createSodiumMCInstPrinter);
     TargetRegistry::RegisterMCCodeEmitter(*T, createSodiumMCCodeEmitter);
     TargetRegistry::RegisterMCAsmBackend(*T, createSodiumAsmBackend);
   }
+  TargetRegistry::RegisterMCAsmInfo(getTheSodium16Target(), createSodiumMCAsmInfo<false>);
+  TargetRegistry::RegisterMCAsmInfo(getTheSodium32Target(), createSodiumMCAsmInfo<true>);
 }

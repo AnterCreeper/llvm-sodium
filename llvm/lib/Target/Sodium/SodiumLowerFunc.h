@@ -91,10 +91,10 @@ SDValue SodiumTargetLowering::LowerBR_JT(SDValue Op, SelectionDAG &DAG) const {
 
 SDValue SodiumTargetLowering::LowerVASTART(SDValue Op, SelectionDAG &DAG) const {
   MachineFunction &MF = DAG.getMachineFunction();
-  SodiumMachineFunctionInfo *FuncInfo = MF.getInfo<SodiumMachineFunctionInfo>();
+  SodiumMachineFunctionInfo *SodiumFI = MF.getInfo<SodiumMachineFunctionInfo>();
 
   SDLoc DL(Op);
-  SDValue FI = DAG.getFrameIndex(FuncInfo->getVarArgsFrameIndex(),
+  SDValue FI = DAG.getFrameIndex(SodiumFI->getVarArgsFrameIndex(),
                                  getPointerTy(MF.getDataLayout()));
 
   // vastart just stores the address of the VarArgsFrameIndex slot into the

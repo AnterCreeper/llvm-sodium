@@ -103,6 +103,9 @@ private:
   SDValue LowerBR_JT(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerVASTART(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerMUL_LOHI(SDValue Op, SelectionDAG &DAG, bool isSigned) const;
+
+  void writeVarArgRegs(std::vector<SDValue> &OutChains, SDValue Chain, const SDLoc &DL,
+                       SelectionDAG &DAG, CCState &CCInfo) const;
 };
 
 //Configuration of DAGCombine

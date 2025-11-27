@@ -22,7 +22,7 @@ class SodiumMCAsmInfo : public MCAsmInfoELF {
   void anchor() override;
 
 public:
-  explicit SodiumMCAsmInfo(const Triple &TargetTriple);
+  explicit SodiumMCAsmInfo(const Triple &TT, bool is32Bit);
 };
 
 } // namespace llvm

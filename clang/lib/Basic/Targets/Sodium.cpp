@@ -47,6 +47,7 @@ ArrayRef<const char *> SodiumTargetInfo::getGCCRegNames() const {
 
 ArrayRef<TargetInfo::GCCRegAlias> SodiumTargetInfo::getGCCRegAliases() const {
   static const TargetInfo::GCCRegAlias GCCRegAliases[] = {
+      // Integer registers
       {{"zero"}, "x0"}, {{"t5"}, "x1"},   {{"ra"}, "x2"},    {{"r0"}, "x3"},
       {{"sp"}, "x4"},   {{"r1"}, "x5"},   {{"gp"}, "x6"},    {{"t4"}, "x7"},
       {{"s0"}, "x8"},   {{"s1"}, "x9"},   {{"a0"}, "x10"},   {{"a1"}, "x11"},
@@ -55,6 +56,11 @@ ArrayRef<TargetInfo::GCCRegAlias> SodiumTargetInfo::getGCCRegAliases() const {
       {{"s4"}, "x20"},  {{"s5"}, "x21"},  {{"s6"}, "x22"},   {{"s7"}, "x23"},
       {{"s8"}, "x24"},  {{"s9"}, "x25"},  {{"s10"}, "x26"},  {{"s11"}, "x27"},
       {{"t0"}, "x28"},  {{"t1"}, "x29"},  {{"t2"}, "x30"},   {{"t3"}, "x31"},
+      // Double registers
+      {{"zero"}, "d0"}, {{"ra32"}, "d1"}, {{"sp32"}, "d2"},  {{"gp32"}, "d3"},
+      {{"s0"}, "d4"},   {{"a0"}, "d5"},   {{"a2"}, "d6"},    {{"a4"}, "d7"},
+      {{"a6"}, "d8"},   {{"s2"}, "d9"},   {{"s4"}, "d10"},   {{"s6"}, "d11"},
+      {{"s8"}, "d12"},  {{"s10"}, "d13"}, {{"t0"}, "d14"},   {{"t2"}, "d15"},
   };
   return llvm::ArrayRef(GCCRegAliases);
 }

@@ -27,13 +27,13 @@ public:
   SodiumTargetInfo(const llvm::Triple &Triple, const TargetOptions &)
       : TargetInfo(Triple) {
     SuitableAlign = 128;
-    IntWidth = IntAlign = 16;     //int:      16b
-    LongWidth = LongAlign = 32;   //long:     32b
-    LongLongWidth = LongLongAlign = 64;
-				  //longlong: 64b
-    WIntType = UnsignedLong;      //wint_t:   long, 32b
-    WCharType = SignedLong;       //wchat_t:  long, 32b
-    IntMaxType = SignedLongLong;  //intmax:   longlong, 64b
+    IntAlign = LongAlign = LongLongAlign = 16;
+    IntWidth = 16;                //int:      16b
+    LongWidth = 32;               //long:     32b
+    LongLongWidth = 64;           //longlong: 64b
+    WIntType = UnsignedLong;      //wint_t:   long
+    WCharType = SignedLong;       //wchat_t:  long
+    IntMaxType = SignedLongLong;  //intmax:   longlong
   }
 
   void getTargetDefines(const LangOptions &Opts,
@@ -69,8 +69,8 @@ public:
     "-m:e"
     // 16-bit pointers, 16-bit aligned
     "-p:16:16"
-    // 32-bit integers, 32-bit aligned
-    "-i32:32"
+    // 32-bit integers, 16-bit aligned
+    "-i32:16"
     // 16-bit and 32-bit native integer width
     "-n16:32"
     // 128-bit natural stack alignment, in 16 Bytes
@@ -91,10 +91,10 @@ public:
     resetDataLayout("e"
     // ELF name mangling
     "-m:e"
-    // 32-bit pointers, 32-bit aligned
-    "-p:32:32"
-    // 32-bit integers, 32-bit aligned
-    "-i32:32"
+    // 32-bit pointers, 16-bit aligned
+    "-p:32:16"
+    // 32-bit integers, 16-bit aligned
+    "-i32:16"
     // 16-bit and 32-bit native integer width
     "-n16:32"
     // 128-bit natural stack alignment, in 16 Bytes

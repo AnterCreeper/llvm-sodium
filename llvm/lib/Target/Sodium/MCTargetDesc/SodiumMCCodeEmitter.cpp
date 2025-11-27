@@ -193,33 +193,7 @@ SodiumMCCodeEmitter::getExprOpValue(const MCInst &MI, const MCExpr *Expr,
     }
   }
 
-  if (FixupKind == Sodium::fixup_sodium_invalid) {
-    unsigned num;
-    switch(Kind) {
-    default:
-      num = 0;
-      break;
-    case MCExpr::Binary:
-      num = 1;
-      break;
-    case MCExpr::Constant:
-      num = 2;
-      break;
-    case MCExpr::SymbolRef:
-      num = 3;
-      break;
-    case MCExpr::Unary:
-      num = 4;
-      break;
-    case MCExpr::Target:
-      num = 5;
-      break;
-    }
-    LLVM_DEBUG(errs() << "FIXME::Kind: " << num << "\n");
-    LLVM_DEBUG(errs() << "FIXME::Format: " << MIFrm << "\n");
-    llvm_unreachable("Unhandled expression!");
-  }
-  //assert(FixupKind != Sodium::fixup_sodium_invalid && "Unhandled expression!");
+  assert(FixupKind != Sodium::fixup_sodium_invalid && "Unhandled expression!");
 
   Fixups.push_back(MCFixup::create(0, Expr, MCFixupKind(FixupKind), MI.getLoc()));
 

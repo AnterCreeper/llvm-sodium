@@ -18,8 +18,9 @@ using namespace llvm;
 
 void SodiumMCAsmInfo::anchor() {}
 
-SodiumMCAsmInfo::SodiumMCAsmInfo(const Triple &TT) {
-  CodePointerSize = CalleeSaveStackSlotSize = 2; //FIXME
+// ref: SodiumMCTargetDesc.cpp
+SodiumMCAsmInfo::SodiumMCAsmInfo(const Triple &TT, bool is32Bit) {
+  CodePointerSize = CalleeSaveStackSlotSize = is32Bit ? 4 : 2;
   CommentString = "#";
   AlignmentIsInBytes = false;
   SupportsDebugInformation = true;

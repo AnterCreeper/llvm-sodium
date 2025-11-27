@@ -13,10 +13,13 @@
 #include "Sodium.h"
 #include "SodiumISelDAGToDAG.h"
 #include "SodiumTargetMachine.h"
+#include "SodiumMachineFunctionInfo.h"
 #include "TargetInfo/SodiumTargetInfo.h"
 #include "SodiumTargetObjectFile.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
+#include "llvm/CodeGen/MIRParser/MIParser.h"
+#include "llvm/CodeGen/MIRYamlMapping.h"
 #include "llvm/MC/TargetRegistry.h"
 
 using namespace llvm;
@@ -24,8 +27,28 @@ using namespace llvm;
 #define DEBUG_TYPE "sodium"
 
 //refer to clang/lib/Basic/Targets/Sodium.h
-StringRef DataLayout16 = "e-m:e-p:16:16-i32:32-n16:32-S128";
-StringRef DataLayout32 = "e-m:e-p:32:32-i32:32-n16:32-S128";
+StringRef DataLayout16 = "e"
+  // ELF name mangling
+  "-m:e"
+  // 16-bit pointers, 16-bit aligned
+  "-p:16:16"
+  // 32-bit integers, 16-bit aligned
+  "-i32:16"
+  // 16-bit and 32-bit native integer width
+  "-n16:32"
+  // 128-bit natural stack alignment, in 16 Bytes
+  "-S128";
+StringRef DataLayout32 = "e"
+  // ELF name mangling
+  "-m:e"
+  // 32-bit pointers, 16-bit aligned
+  "-p:32:16"
+  // 32-bit integers, 16-bit aligned
+  "-i32:16"
+  // 16-bit and 32-bit native integer width
+  "-n16:32"
+  // 128-bit natural stack alignment, in 16 Bytes
+  "-S128";
 StringRef computeDataLayout(bool is32Bit){
   return is32Bit ? DataLayout32 : DataLayout16;
 }
@@ -74,6 +97,32 @@ TargetPassConfig *SodiumTargetMachine::createPassConfig(PassManagerBase &PM) {
   return new SodiumPassConfig(*this, PM);
 }
 
+yaml::MachineFunctionInfo *
+SodiumTargetMachine::createDefaultFuncInfoYAML() const {
+  return new yaml::SodiumMachineFunctionInfo();
+}
+
+yaml::MachineFunctionInfo *
+SodiumTargetMachine::convertFuncInfoToYAML(const MachineFunction &MF) const {
+  const auto *MFI = MF.getInfo<SodiumMachineFunctionInfo>();
+  return new yaml::SodiumMachineFunctionInfo(*MFI);
+}
+
+MachineFunctionInfo *SodiumTargetMachine::createMachineFunctionInfo(
+    BumpPtrAllocator &Allocator, const Function &F,
+    const TargetSubtargetInfo *STI) const {
+  return SodiumMachineFunctionInfo::create<SodiumMachineFunctionInfo>(Allocator,
+                                                                      F, STI);
+}
+
+bool SodiumTargetMachine::parseMachineFunctionInfo(
+    const yaml::MachineFunctionInfo &MFI, PerFunctionMIParsingState &PFS,
+    SMDiagnostic &Error, SMRange &SourceRange) const {
+  const auto &YamlMFI =
+      static_cast<const yaml::SodiumMachineFunctionInfo &>(MFI);
+  PFS.MF.getInfo<SodiumMachineFunctionInfo>()->initializeBaseYamlFields(YamlMFI);
+  return false;
+}
 
 //16bit and 32bit mode of Sodium
 void Sodium16TargetMachine::anchor() {}

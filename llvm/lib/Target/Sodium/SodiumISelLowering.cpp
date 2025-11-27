@@ -250,6 +250,70 @@ SodiumTargetLowering::analyzeArgs(const SmallVectorImpl<T> &Args,
   }
 }
 
+static const MCPhysReg ArgGPRs[] = {  //a0-a7
+  Sodium::X10, Sodium::X11, Sodium::X12, Sodium::X13,
+  Sodium::X14, Sodium::X15, Sodium::X16, Sodium::X17
+};
+
+/// writeVarArgRegs - Write variable function arguments passed in registers
+/// to the stack. Also create a stack frame object for the first variable
+/// argument.
+void SodiumTargetLowering::writeVarArgRegs(std::vector<SDValue> &OutChains,
+                                         SDValue Chain, const SDLoc &DL,
+                                         SelectionDAG &DAG,
+                                         CCState &CCInfo) const {
+  ArrayRef<MCPhysReg> ArgRegs = ArrayRef(ArgGPRs);
+  unsigned Idx = CCInfo.getFirstUnallocated(ArgRegs);
+  const TargetRegisterClass *RC = &Sodium::IntRegsRegClass;
+  MachineFunction &MF = DAG.getMachineFunction();
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+  MachineRegisterInfo &RegInfo = MF.getRegInfo();
+  SodiumMachineFunctionInfo *SodiumFI = MF.getInfo<SodiumMachineFunctionInfo>();
+
+  // Offset of the first variable argument from stack pointer, and size of
+  // the vararg save area. For now, the varargs save area is either zero or
+  // large enough to hold a0-a7.
+  int VaArgOffset, VarArgsSaveSize;
+
+  // If all registers are allocated, then all varargs must be passed on the
+  // stack and we don't need to save any argregs.
+  MVT RegTy = MVT::i16;
+  unsigned RegSizeInBytes = 2;
+  if (ArgRegs.size() == Idx) {
+    VaArgOffset = CCInfo.getStackSize();
+    VarArgsSaveSize = 0;
+  } else {
+    VarArgsSaveSize = RegSizeInBytes * (ArgRegs.size() - Idx);
+    VaArgOffset = -VarArgsSaveSize;
+  }
+
+  // Record the frame index of the first variable argument
+  // which is a value necessary to VASTART.
+  int FI = MFI.CreateFixedObject(RegSizeInBytes, VaArgOffset, true);
+  SodiumFI->setVarArgsFrameIndex(FI);
+
+  // Copy the integer registers that have not been used for argument passing
+  // to the argument register save area. For O32, the save area is allocated
+  // in the caller's stack frame, while for N32/64, it is allocated in the
+  // callee's stack frame.
+  for (unsigned I = Idx; I < ArgRegs.size();
+       ++I, VaArgOffset += RegSizeInBytes) {
+    const Register Reg = RegInfo.createVirtualRegister(RC);
+    RegInfo.addLiveIn(ArgRegs[I], Reg);
+    SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, RegTy);
+    FI = MFI.CreateFixedObject(RegSizeInBytes, VaArgOffset, true);
+    SDValue PtrOff = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+    SDValue Store =
+        DAG.getStore(Chain, DL, ArgValue, PtrOff,
+                     MachinePointerInfo::getFixedStack(MF, FI));
+    cast<StoreSDNode>(Store.getNode())->getMemOperand()->setValue(
+        (Value *)nullptr);
+    OutChains.push_back(Store);
+  }
+  //FIXME
+  //SodiumFI->setVarArgsSaveSize(VarArgsSaveSize);
+}
+
 // Transform physical registers into virtual registers.
 SDValue
 SodiumTargetLowering::LowerFormalArguments(SDValue Chain,
@@ -273,6 +337,9 @@ const {
   CCState CCInfo(CallConv, IsVarArg, MF, ArgLocs, *DAG.getContext());
   analyzeArgs<ISD::InputArg>(Ins, CCInfo);
 
+  // Used with vargs to acumulate store chains.
+  std::vector<SDValue> OutChains;
+
   for (unsigned I = 0, E = ArgLocs.size(); I != E; ++I) {
     CCValAssign &VA = ArgLocs[I];
     MVT LocVT = VA.getLocVT();
@@ -289,7 +356,18 @@ const {
       SDValue Load = DAG.getLoad(LocVT, DL, Chain, FIN,
           MachinePointerInfo::getFixedStack(MF, FI));
       InVals.push_back(Load);
+      OutChains.push_back(Load.getValue(1));
     }
+  }
+
+  if (IsVarArg)
+    writeVarArgRegs(OutChains, Chain, DL, DAG, CCInfo);
+
+  // All stores are grouped in one node to allow the matching between
+  // the size of Ins and InVals. This only happens when on varg functions
+  if (!OutChains.empty()) {
+    OutChains.push_back(Chain);
+    Chain = DAG.getNode(ISD::TokenFactor, DL, MVT::Other, OutChains);
   }
   return Chain;
 }

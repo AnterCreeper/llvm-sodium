@@ -54,8 +54,6 @@ private:
   unsigned LibCallStackSize = 0;
   /// Size of stack frame to save callee saved registers
   unsigned CalleeSavedStackSize = 0;
-  /// Is there any vector argument or return?
-  bool IsVectorCall = false;
 
 public:
   SodiumMachineFunctionInfo(const Function &F, const TargetSubtargetInfo *STI) {}
@@ -79,8 +77,6 @@ public:
 
   void initializeBaseYamlFields(const yaml::SodiumMachineFunctionInfo &YamlMFI);
 
-  bool isVectorCall() const { return IsVectorCall; }
-  void setIsVectorCall() { IsVectorCall = true; }
 };
 
 } // end namespace llvm

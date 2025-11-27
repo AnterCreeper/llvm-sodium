@@ -124,6 +124,8 @@ public:
                  const MCInstrInfo &MII, const MCTargetOptions &Options)
       : MCTargetAsmParser(Options, STI, MII) {
     MCAsmParserExtension::Initialize(Parser);
+    Parser.addAliasForDirective(".word",  ".2byte");
+    Parser.addAliasForDirective(".dword", ".4byte");
     setAvailableFeatures(ComputeAvailableFeatures(STI.getFeatureBits()));
   }
 };
