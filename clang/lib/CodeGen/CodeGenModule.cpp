@@ -219,6 +219,10 @@ createTargetCodeGenInfo(CodeGenModule &CGM) {
   case llvm::Triple::msp430:
     return createMSP430TargetCodeGenInfo(CGM);
 
+  case llvm::Triple::sodium16:
+  case llvm::Triple::sodium32:
+    return createSodiumTargetCodeGenInfo(CGM);
+
   case llvm::Triple::riscv32:
   case llvm::Triple::riscv64: {
     StringRef ABIStr = Target.getABI();

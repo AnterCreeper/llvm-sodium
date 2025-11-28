@@ -424,6 +424,7 @@ def TargetAnyMips : TargetArch<["mips", "mipsel", "mips64", "mips64el"]>;
 def TargetMSP430 : TargetArch<["msp430"]>;
 def TargetM68k : TargetArch<["m68k"]>;
 def TargetRISCV : TargetArch<["riscv32", "riscv64"]>;
+def TargetSodium : TargetArch<["sodium16", "sodium32"]>;
 def TargetX86 : TargetArch<["x86"]>;
 def TargetAnyX86 : TargetArch<["x86", "x86_64"]>;
 def TargetWebAssembly : TargetArch<["wasm32", "wasm64"]>;
@@ -1896,6 +1897,13 @@ def RISCVRVVVectorBits : TypeAttr {
   let PragmaAttributeSupport = 0;
   // Represented as VectorType instead.
   let ASTNode = 0;
+}
+
+def SodiumInterrupt : InheritableAttr, TargetSpecificAttr<TargetSodium> {
+  let Spellings = [GCC<"interrupt">];
+  let Subjects = SubjectList<[Function]>;
+  let ParseKind = "Interrupt";
+  let Documentation = [Undocumented];
 }
 
 // This is not a TargetSpecificAttr so that is silently accepted and

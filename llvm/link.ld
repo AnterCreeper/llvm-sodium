@@ -2,14 +2,9 @@ ENTRY (_start)
 SECTIONS
 {
   . = 0x0000;
-  .init : {
-    . = ALIGN(4);
-    KEEP(*(SORT_NONE(.init)))
-    . = ALIGN(4);
-  }
   .vector :
   {
-    *(.vector);
+    KEEP(*(SORT_NONE(.vector)))
 	. = ALIGN(16);
   }
   .text : {

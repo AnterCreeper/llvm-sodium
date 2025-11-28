@@ -7802,6 +7802,30 @@ static void handleRISCVInterruptAttr(Sema &S, Decl *D,
   D->addAttr(::new (S.Context) RISCVInterruptAttr(S.Context, AL, Kind));
 }
 
+static void handleSodiumInterruptAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
+  // Sodium 'interrupt' attribute is applied to
+  // a function with no parameters and void return type.
+  if (!isFunctionOrMethod(D)) {
+    S.Diag(D->getLocation(), diag::warn_attribute_wrong_decl_type)
+    << AL << AL.isRegularKeywordAttribute() << ExpectedFunctionOrMethod;
+    return;
+  }
+
+  if (hasFunctionProto(D) && getFunctionOrMethodNumParams(D) != 0) {
+    S.Diag(D->getLocation(), diag::warn_interrupt_attribute_invalid)
+    << /*Sodium*/ 3 << 0;
+    return;
+  }
+
+  if (!getFunctionOrMethodResultType(D)->isVoidType()) {
+    S.Diag(D->getLocation(), diag::warn_interrupt_attribute_invalid)
+    << /*Sodium*/ 3 << 1; //refer to llvm-project/clang/include/clang/Basic/DiagnosticSemaKinds.td:318
+    return;
+  }
+
+  handleSimpleAttribute<SodiumInterruptAttr>(S, D, AL);
+}
+
 static void handleInterruptAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   // Dispatch the interrupt attribute based on the current target.
   switch (S.Context.getTargetInfo().getTriple().getArch()) {
@@ -7825,6 +7849,10 @@ static void handleInterruptAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   case llvm::Triple::riscv32:
   case llvm::Triple::riscv64:
     handleRISCVInterruptAttr(S, D, AL);
+    break;
+  case llvm::Triple::sodium16:
+  case llvm::Triple::sodium32:
+    handleSodiumInterruptAttr(S, D, AL);
     break;
   default:
     handleARMInterruptAttr(S, D, AL);
