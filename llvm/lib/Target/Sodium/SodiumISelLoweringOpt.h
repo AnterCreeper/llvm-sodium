@@ -249,14 +249,7 @@ static SDValue performLogicCombine(SDNode *N,
 static SDValue performXORCombine(SDNode *N, SelectionDAG &DAG) {
   SDValue N0 = N->getOperand(0);
   SDValue N1 = N->getOperand(1);
-  // fold xor (sll 1, x), -1 => rol ~1, x
-  if (N0.getOpcode() == ISD::SHL &&
-      isAllOnesConstant(N1) && isOneConstant(N0.getOperand(0))) {
-    SDLoc DL(N);
-    EVT VT = N->getValueType(0);
-    return DAG.getNode(ISD::ROTL, DL, VT,
-                       DAG.getConstant(~1, DL, VT), N0.getOperand(1));
-  }
+
   // fold xor (setcc constant, y, setlt), 1 => setcc y, constant + 1, setlt
   if (N0.hasOneUse() && N0.getOpcode() == ISD::SETCC && isOneConstant(N1)) {
     auto *ConstN00 = dyn_cast<ConstantSDNode>(N0.getOperand(0));
@@ -273,17 +266,11 @@ static SDValue performXORCombine(SDNode *N, SelectionDAG &DAG) {
   return SDValue();
 }
 
-// Try to combine two adjacent loads/stores to a single pair instruction.
-static SDValue performMemPairCombine(SDNode *N,
-                                     TargetLowering::DAGCombinerInfo &DCI) {
-  //TODO
-  return SDValue();
-}
-
 // Perform common combines for BR_CC and SELECT_CC condtions.
 static bool performCCCombine(SDValue &LHS, SDValue &RHS, SDValue &CC,
                              const SDLoc &DL, SelectionDAG &DAG) {
   ISD::CondCode CCVal = cast<CondCodeSDNode>(CC)->get();
+
   // fold setlt (sra X, N), 0 => setlt X, 0 and
   //      setge (sra X, N), 0 => setge X, 0
   if (auto *RHSConst = dyn_cast<ConstantSDNode>(RHS.getNode())) {

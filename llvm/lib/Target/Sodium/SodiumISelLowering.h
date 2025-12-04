@@ -113,7 +113,6 @@ static const ISD::NodeType ISD_COMBINE[] = {
   ISD::ADD, ISD::SUB,
   ISD::AND, ISD::OR, ISD::XOR,
   ISD::MUL,
-  ISD::LOAD, ISD::STORE,
   ISD::BR_CC, ISD::SELECT_CC
 };
 

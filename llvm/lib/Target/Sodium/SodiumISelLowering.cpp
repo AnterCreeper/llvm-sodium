@@ -68,8 +68,8 @@ SodiumTargetLowering::SodiumTargetLowering(const TargetMachine &TM,
   AddPromotedToType(ISD::SETCC, MVT::i1, MVT::i16);
   setLoadExtAction({ISD::EXTLOAD, ISD::SEXTLOAD, ISD::ZEXTLOAD}, MVT::i16,
                    MVT::i1, Promote);
-  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1, Expand);
-  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8, Expand);
+  //setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1, Expand);
+  //setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8, Expand);
 
   // Plenty of Settings.
   setTargetDAGCombine(ISD_COMBINE);
@@ -229,10 +229,6 @@ void SodiumTargetLowering::ReplaceNodeResults(SDNode *N,
   }
   case ISD::ADD:
   case ISD::SUB: {
-    //TODO
-    break;
-  }
-  case ISD::MUL: {
     //TODO
     break;
   }
@@ -436,9 +432,6 @@ SDValue SodiumTargetLowering::PerformDAGCombine(SDNode *N,
   case ISD::OR:
   case ISD::AND:
     return performLogicCombine(N, DCI);
-  case ISD::LOAD:
-  case ISD::STORE:
-    return performMemPairCombine(N, DCI);
   case ISD::BR_CC: {
     SDLoc DL(N);
     SDValue LHS = N->getOperand(1);

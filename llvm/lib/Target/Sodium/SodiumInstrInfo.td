@@ -409,11 +409,11 @@ def MOVN : CMOV_rr<0b000, 0b111, 0, "movn">;
 def SLL : ALU_rr<0b010, 0b000, 0, "sll">;
 def SRL : ALU_rr<0b010, 0b010, 0, "srl">;
 def SRA : ALU_rr<0b010, 0b100, 0, "sra">;
-def ROL : ALU_rr<0b010, 0b110, 0, "rol">;
+def SRR : ALU_rr<0b010, 0b110, 0, "srr">;
 def SLLI : ALU_ri<0b010, 0b000, "sll.i">;
 def SRLI : ALU_ri<0b010, 0b010, "srl.i">;
 def SRAI : ALU_ri<0b010, 0b100, "sra.i">;
-def ROLI : ALU_ri<0b010, 0b110, "rol.i">;
+def SRRI : ALU_ri<0b010, 0b110, "srr.i">;
 def SHADD : SHADD_rri<0b010, 0b001, "shadd">;
 
 //Logical
@@ -700,15 +700,15 @@ def : PatRegReg<srl, SRL>;
 def : PatRegSimm13<srl, SRLI>;
 def : PatRegReg<sra, SRA>;
 def : PatRegSimm13<sra, SRAI>;
-def : PatRegReg<rotl, ROL>;
-def : PatRegSimm13<rotl, ROLI>;
+def : PatRegReg<rotr, SRR>;
+def : PatRegSimm13<rotr, SRRI>;
 
 def ImmSubFrom16 : SDNodeXForm<imm, [{
   return CurDAG->getTargetConstant(16 - N->getZExtValue(), SDLoc(N),
                                    N->getValueType(0));
 }]>;
-def : Pat<(i16 (rotr IntRegs:$rs1, IntRegs:$rs2)),  (ROL IntRegs:$rs1, (SUB X0, IntRegs:$rs2))>;
-def : Pat<(i16 (rotr IntRegs:$rs1, simm13:$imm13)), (ROLI IntRegs:$rs1, (ImmSubFrom16 simm13:$imm13))>;
+def : Pat<(i16 (rotl IntRegs:$rs1, IntRegs:$rs2)),  (SRR IntRegs:$rs1, (SUB X0, IntRegs:$rs2))>;
+def : Pat<(i16 (rotl IntRegs:$rs1, simm13:$imm13)), (SRRI IntRegs:$rs1, (ImmSubFrom16 simm13:$imm13))>;
 
 def : Pat<(i16 (add (shl (i16 IntRegs:$rs1), uimm3_plus1:$flag7), (i16 IntRegs:$rs2))),
   (SHADD IntRegs:$rs1, IntRegs:$rs2, uimm3_plus1:$flag7)>;
@@ -728,12 +728,13 @@ def : PatRegReg<smax, MAX>;
 def : PatRegReg<umin, MINU>;
 def : PatRegReg<umax, MAXU>;
 def : Pat<(i16 (cttz (i16 IntRegs:$rs))),  (CLZ (REV IntRegs:$rs))>;
-def : Pat<(i16 (bswap (i16 IntRegs:$rs))), (ROLI IntRegs:$rs, 8)>;
+def : Pat<(i16 (bswap (i16 IntRegs:$rs))), (SRRI IntRegs:$rs, 8)>;
 def : PatRegReg<sodium_tbe, TBE>;
 
 def zexti8 : ComplexPattern<i16, 1, "SelectZExtBits<8>">;
 def : Pat<(i16 (or (shl IntRegs:$rs1, (i16 8)), (zexti8 (i16 IntRegs:$rs2)))),
   (PACK IntRegs:$rs1, IntRegs:$rs2, 8)>;
+def : Pat<(i16 (sext_inreg IntRegs:$rs1, i1)), (SBFX IntRegs:$rs1, 0, 0)>;
 def : Pat<(i16 (sext_inreg IntRegs:$rs1, i8)), (SBFX IntRegs:$rs1, 0, 7)>;
 
 def : Pat<(i16 (and IntRegs:$rs1, (not IntRegs:$rs2))), (ANDN IntRegs:$rs1, IntRegs:$rs2)>;
