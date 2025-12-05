@@ -93,11 +93,6 @@ void SodiumFrameLowering::emitPrologue(MachineFunction &MF,
   DebugLoc DL;
   MachineBasicBlock::iterator MBBI = MBB.begin();
 
-  // Since spillCalleeSavedRegisters may have inserted a libcall, skip past
-  // any instructions marked as FrameSetup
-  while (MBBI != MBB.end() && MBBI->getFlag(MachineInstr::FrameSetup))
-    ++MBBI;
-
   MachineFrameInfo &MFI = MF.getFrameInfo();
   uint64_t StackSize = MFI.getStackSize() + MFI.getOffsetAdjustment();
 

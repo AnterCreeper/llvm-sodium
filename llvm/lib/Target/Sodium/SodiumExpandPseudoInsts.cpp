@@ -7,8 +7,7 @@
 //===----------------------------------------------------------------------===//
 //
 // This file contains a pass that expands pseudo instructions into target
-// instructions. This pass should be run after register allocation but before
-// the post-regalloc scheduling pass.
+// instructions.
 //
 //===----------------------------------------------------------------------===//
 
@@ -24,7 +23,8 @@
 
 using namespace llvm;
 
-#define SODIUM_EXPAND_PSEUDO_NAME "Sodium pseudo instruction expansion pass"
+#define DEBUG_TYPE "sodium-pseudo-expand"
+#define PASS_NAME "Sodium pseudo instruction expansion pass"
 
 namespace {
 
@@ -38,7 +38,7 @@ public:
     initializeSodiumExpandPseudoPass(*PassRegistry::getPassRegistry());
   }
   bool runOnMachineFunction(MachineFunction &MF) override;
-  StringRef getPassName() const override { return SODIUM_EXPAND_PSEUDO_NAME; }
+  StringRef getPassName() const override { return PASS_NAME; }
 
 private:
   bool expandMBB(MachineBasicBlock &MBB);
@@ -125,8 +125,7 @@ bool SodiumExpandPseudo::expandLoadLocalAddress(
 
 } // end of anonymous namespace
 
-INITIALIZE_PASS(SodiumExpandPseudo, "sodium-expand-pseudo",
-                SODIUM_EXPAND_PSEUDO_NAME, false, false)
+INITIALIZE_PASS(SodiumExpandPseudo, DEBUG_TYPE, PASS_NAME, false, false)
 
 namespace llvm {
 FunctionPass *createSodiumExpandPseudoPass() { return new SodiumExpandPseudo(); }

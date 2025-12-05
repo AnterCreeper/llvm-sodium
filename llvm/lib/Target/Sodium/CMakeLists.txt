@@ -29,6 +29,7 @@ add_llvm_target(SodiumCodeGen
   SodiumRegisterInfo.cpp
   SodiumExpandPseudoInsts.cpp
   SodiumMachineFunctionInfo.cpp
+  SodiumLoadStoreOptimizer.cpp
 
   LINK_COMPONENTS
   Analysis

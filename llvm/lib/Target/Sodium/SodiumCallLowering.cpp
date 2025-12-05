@@ -147,11 +147,11 @@ SodiumTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
                     *DAG.getContext());
   analyzeArgs<ISD::OutputArg>(Outs, ArgCCInfo);
 
+  //TODO: Sodium does not yet support tail call optimization.
+  IsTailCall = false;
   // Check if it's really possible to do a tail call.
   //if (IsTailCall)
   //  IsTailCall = isEligibleForTailCallOptimization(ArgCCInfo, CLI, MF, ArgLocs);
-  // TODO:Sodium does not yet support tail call optimization.
-  IsTailCall = false;
 
   std::deque<std::pair<unsigned, SDValue>> RegsToPass;
   SmallVector<SDValue, 8> MemOpChains;

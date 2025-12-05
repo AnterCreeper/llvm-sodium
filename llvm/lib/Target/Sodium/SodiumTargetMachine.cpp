@@ -86,6 +86,7 @@ public:
     : TargetPassConfig(TM, PM) {}
   void addPreRegAlloc() override {
     addPass(createSodiumExpandPseudoPass());
+    addPass(createSodiumLoadStoreOptPass());
   }
   bool addInstSelector() override {
     addPass(createSodiumISelDag(getTM<SodiumTargetMachine>(), getOptLevel()));
@@ -148,5 +149,6 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeSodiumTarget() {
     RegisterTargetMachine<Sodium32TargetMachine> Y(getTheSodium32Target());
     auto *PR = PassRegistry::getPassRegistry();
     initializeSodiumExpandPseudoPass(*PR);
+    initializeSodiumLoadStoreOptPass(*PR);
     initializeSodiumDAGToDAGISelPass(*PR);
 }

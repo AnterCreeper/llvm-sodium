@@ -26,8 +26,10 @@ class PassRegistry;
 class SodiumTargetMachine;
 
 void initializeSodiumExpandPseudoPass(PassRegistry &);
+void initializeSodiumLoadStoreOptPass(PassRegistry &);
 void initializeSodiumDAGToDAGISelPass(PassRegistry &);
 FunctionPass *createSodiumExpandPseudoPass();
+FunctionPass *createSodiumLoadStoreOptPass();
 FunctionPass *createSodiumISelDag(SodiumTargetMachine &TM,
                                   CodeGenOpt::Level OptLevel);
 
