@@ -50,8 +50,6 @@ private:
   int VarArgsFrameIndex = 0;
   /// Size of the save area used for varargs
   int VarArgsSaveSize = 0;
-  /// Size of any opaque stack adjustment due to save/restore libcalls.
-  unsigned LibCallStackSize = 0;
   /// Size of stack frame to save callee saved registers
   unsigned CalleeSavedStackSize = 0;
 
@@ -68,9 +66,6 @@ public:
 
   unsigned getVarArgsSaveSize() const { return VarArgsSaveSize; }
   void setVarArgsSaveSize(int Size) { VarArgsSaveSize = Size; }
-
-  unsigned getLibCallStackSize() const { return LibCallStackSize; }
-  void setLibCallStackSize(unsigned Size) { LibCallStackSize = Size; }
 
   unsigned getCalleeSavedStackSize() const { return CalleeSavedStackSize; }
   void setCalleeSavedStackSize(unsigned Size) { CalleeSavedStackSize = Size; }

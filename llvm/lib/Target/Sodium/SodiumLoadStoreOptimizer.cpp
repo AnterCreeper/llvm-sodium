@@ -130,22 +130,26 @@ bool SodiumLoadStoreOpt::optimizeBlock(MachineBasicBlock &MBB) {
 
 bool SodiumLoadStoreOpt::tryToPairLdStInst(MachineBasicBlock::iterator &MBBI) {
   MachineInstr &MI = *MBBI;
-  MachineBasicBlock::iterator E = MI.getParent()->end();
+
+  const MachineMemOperand &MMO = **MI.memoperands_begin();
+  if (MMO.getAlign() < Align(4)) {
+    LLVM_DEBUG(
+      dbgs() << "Skip due to protential unaligned access with alignment "
+             << MMO.getAlign().value() << " on ");
+    LLVM_DEBUG(MI.print(dbgs()));
+    return false;
+  }
 
   // Look ahead instructions for a pairable instruction.
   MachineBasicBlock::iterator Paired = findMatchingInsn(MBBI);
-  if (Paired != E) {
+  if (Paired != MI.getParent()->end()) {
     // Keeping the iterator straight is a pain, so we let the merge routine tell
     // us what the next instruction is after it's done mucking about.
     MBBI = mergePairedInsns(MBBI, Paired);
-    return false;//true;//TODO
+    return true;
   }
-  return false;
-}
 
-static bool isAlign(const MachineInstr &MI) {
-  const MachineMemOperand &MMO = **MI.memoperands_begin();
-  return MMO.getAlign() >= Align(4);
+  return false;
 }
 
 /// Scan the instructions looking for a load/store that can be combined with the
@@ -157,7 +161,6 @@ SodiumLoadStoreOpt::findMatchingInsn(MachineBasicBlock::iterator I) {
   MachineBasicBlock::iterator MBBI = next_nodbg(I, E);
 
   MachineInstr &FirstMI = *I;
-  bool     Align   = isAlign(FirstMI);
   Register BaseReg = FirstMI.getOperand(1).getReg();
   int64_t  Offset  = FirstMI.getOperand(2).getImm();
   for (unsigned Count = 0; MBBI != E && Count < LdStLimit;
@@ -173,20 +176,18 @@ SodiumLoadStoreOpt::findMatchingInsn(MachineBasicBlock::iterator I) {
     if (MI.isCall())
       return E;
 
-    // Test if match Pair Pattern
+    // Test if match Pair Pattern.
     if (isCandidateToPair(MI) && FirstMI.getOpcode() == MI.getOpcode()) {
       // TODO: Make sure to check the new instruction offset is
       // actually an immediate and not a symbolic reference destined for
       // a relocation.
-      bool     MIAlign   = isAlign(MI);
       Register MIBaseReg = MI.getOperand(1).getReg();
       int64_t  MIOffset  = MI.getOperand(2).getImm();
-      if (BaseReg == MIBaseReg) {
-        if (  Align && (  Offset + 2 == MIOffset)) return MBBI;
-        if (MIAlign && (MIOffset + 2 == Offset))   return MBBI;
-      }
+      if ((BaseReg == MIBaseReg) && (Offset + 2 == MIOffset))
+        return MBBI;
     }
   }
+
   return E;
 }
 
@@ -202,20 +203,41 @@ SodiumLoadStoreOpt::mergePairedInsns(MachineBasicBlock::iterator I,
   if (NextI == Paired)
     NextI = next_nodbg(NextI, E);
 
-  //TODO: Pair Load/Store BuildMI
+  MachineBasicBlock &MBB = *I->getParent();
+  MachineFunction *MF = MBB.getParent();
+
+  // Construct the new instruction.
+  DebugLoc DL = I->getDebugLoc();
+  MachineBasicBlock::iterator InsertionPoint = I;
+
+  MachineInstr *Lo = &*I;
+  MachineInstr *Hi = &*Paired;
+  unsigned Opcode = Lo->getOpcode() == Sodium::LW ? Sodium::LD : Sodium::SD;
+  Register ScratchReg =
+    MF->getRegInfo().createVirtualRegister(&Sodium::IntPairRegClass);
+
+  MachineInstr *Res =
+  BuildMI(MBB, InsertionPoint, DL, TII->get(Opcode), ScratchReg)
+    .add(Lo->getOperand(1))
+    .add(Lo->getOperand(2));
+  BuildMI(MBB, InsertionPoint, DL, TII->get(TargetOpcode::COPY), Lo->getOperand(0).getReg())
+    .addReg(ScratchReg, 0, Sodium::sub_even);
+
+  BuildMI(MBB, InsertionPoint, Paired->getDebugLoc(), TII->get(TargetOpcode::COPY), Hi->getOperand(0).getReg())
+    .addReg(ScratchReg, 0, Sodium::sub_odd);
 
   LLVM_DEBUG(
       dbgs() << "Creating pair load/store. Replacing instructions:\n    ");
-  LLVM_DEBUG(I->print(dbgs()));
+  LLVM_DEBUG(Lo->print(dbgs()));
   LLVM_DEBUG(dbgs() << "    ");
-  LLVM_DEBUG(Paired->print(dbgs()));
+  LLVM_DEBUG(Hi->print(dbgs()));
   LLVM_DEBUG(dbgs() << "  with instruction:\n    ");
-  //LLVM_DEBUG(((MachineInstr *)MIB)->print(dbgs()));
+  LLVM_DEBUG(Res->print(dbgs()));
   LLVM_DEBUG(dbgs() << "\n");
 
   // Erase the old instructions.
-  //I->eraseFromParent();
-  //Paired->eraseFromParent();
+  I->eraseFromParent();
+  Paired->eraseFromParent();
 
   return NextI;
 }

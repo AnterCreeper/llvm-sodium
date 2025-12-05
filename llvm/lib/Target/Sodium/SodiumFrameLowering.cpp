@@ -255,3 +255,26 @@ SodiumFrameLowering::eliminateCallFramePseudoInstr(MachineFunction &MF, MachineB
   }
   return MBB.erase(I);
 }
+
+namespace {
+struct SavedRegInfo {
+  unsigned Reg1 = Sodium::NoRegister;
+  unsigned Reg2 = Sodium::NoRegister;
+  int      FrameIdx;
+  SavedRegInfo() = default;
+  bool isPaired() const { return Reg2 != Sodium::NoRegister; }
+};
+
+} // end anonymous namespace
+
+// Test if valid adjacent register pairs with [odd, even]
+static bool invalidRegisterPairing(unsigned Reg1, unsigned Reg2) {
+  assert(Sodium::IntRegsRegClass.contains(Reg1) && Sodium::IntRegsRegClass.contains(Reg2) &&
+         "IntPair callee-saved regs to spill!");
+  assert(Reg1 != Reg2 &&
+         "Duplicated callee-saved regs to spill!");
+  if (Reg1 < Reg2)
+    return (Reg1 & 0x1) || (Reg2 != Reg1 + 1);
+  else
+    return (Reg2 & 0x1) || (Reg1 != Reg2 + 1);
+}
