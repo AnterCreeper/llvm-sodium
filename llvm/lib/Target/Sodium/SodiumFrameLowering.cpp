@@ -13,6 +13,7 @@
 #include "SodiumFrameLowering.h"
 #include "SodiumInstrInfo.h"
 #include "SodiumSubtarget.h"
+#include "SodiumMachineFunctionInfo.h"
 #include "llvm/MC/MCDwarf.h"
 #include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
@@ -23,6 +24,8 @@
 #include "llvm/CodeGen/RegisterScavenging.h"
 
 using namespace llvm;
+
+#define DEBUG_TYPE "frame-info"
 
 /*
 // hasFP - Return true if the specified function should have a dedicated frame
@@ -208,6 +211,7 @@ void SodiumFrameLowering::determineCalleeSaves(MachineFunction &MF,
                                                RegScavenger *RS) const {
   TargetFrameLowering::determineCalleeSaves(MF, SavedRegs, RS);
   auto &Subtarget = MF.getSubtarget<SodiumSubtarget>();
+
   if (MF.getFrameInfo().hasCalls()) {
     SavedRegs.set(Sodium::X2);
     if(Subtarget.is32Bit) SavedRegs.set(Sodium::X3);
@@ -216,6 +220,7 @@ void SodiumFrameLowering::determineCalleeSaves(MachineFunction &MF,
       if(Subtarget.is32Bit) SavedRegs.set(Sodium::X9);
     }
   }
+
   // If interrupt is enabled and there are calls in the handler,
   // unconditionally save all Caller-saved registers, regardless whether they are used.
   MachineFrameInfo &MFI = MF.getFrameInfo();
@@ -256,25 +261,49 @@ SodiumFrameLowering::eliminateCallFramePseudoInstr(MachineFunction &MF, MachineB
   return MBB.erase(I);
 }
 
-namespace {
-struct SavedRegInfo {
-  unsigned Reg1 = Sodium::NoRegister;
-  unsigned Reg2 = Sodium::NoRegister;
-  int      FrameIdx;
-  SavedRegInfo() = default;
-  bool isPaired() const { return Reg2 != Sodium::NoRegister; }
-};
-
-} // end anonymous namespace
+static Register convertIntRegsToIntPair(Register Reg) {
+  assert(Reg >= Sodium::X0 && Reg <= Sodium::X31 && "Invalid register");
+  return Sodium::D0 + ((Reg - Sodium::X0) >> 1);
+}
 
 // Test if valid adjacent register pairs with [odd, even]
 static bool invalidRegisterPairing(unsigned Reg1, unsigned Reg2) {
   assert(Sodium::IntRegsRegClass.contains(Reg1) && Sodium::IntRegsRegClass.contains(Reg2) &&
          "IntPair callee-saved regs to spill!");
-  assert(Reg1 != Reg2 &&
-         "Duplicated callee-saved regs to spill!");
   if (Reg1 < Reg2)
-    return (Reg1 & 0x1) || (Reg2 != Reg1 + 1);
+    return ((Reg1 - Sodium::X0) & 0x1) || (Reg2 != Reg1 + 1);
   else
-    return (Reg2 & 0x1) || (Reg1 != Reg2 + 1);
+    return ((Reg2 - Sodium::X0) & 0x1) || (Reg1 != Reg2 + 1);
+}
+
+bool
+SodiumFrameLowering::assignCalleeSavedSpillSlots(MachineFunction &MF,
+                                                 const TargetRegisterInfo *TRI,
+                                                 std::vector<CalleeSavedInfo> &CSI) const {
+  if (CSI.empty())
+    return true; // Early exit if no callee saved registers are modified!
+
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+
+  // Now that we know which registers need to be saved and restored, allocate
+  // stack slots for them.
+  for (std::vector<CalleeSavedInfo>::iterator I = CSI.begin(); I != CSI.end(); ++I) {
+    MCRegister Reg = I->getReg();
+
+    auto Next = std::next(I);
+    if (Next != CSI.end() && !invalidRegisterPairing(Reg, Next->getReg())) {
+      Reg = convertIntRegsToIntPair(Reg);
+      I->setReg(Reg);
+      CSI.erase(Next);
+    }
+
+    const TargetRegisterClass *RC = TRI->getMinimalPhysRegClass(Reg);
+    unsigned Size = TRI->getSpillSize(*RC);
+    Align Alignment(TRI->getSpillAlign(*RC));
+
+    int FrameIdx = MFI.CreateStackObject(Size, Alignment, true);
+    I->setFrameIdx(FrameIdx);
+  }
+
+  return true;
 }

@@ -61,6 +61,7 @@ public:
   Register getReg()                        const { return Reg; }
   int getFrameIdx()                        const { return FrameIdx; }
   unsigned getDstReg()                     const { return DstReg; }
+  void setReg(MCRegister R) { Reg = R; }
   void setFrameIdx(int FI) {
     FrameIdx = FI;
     SpilledToReg = false;

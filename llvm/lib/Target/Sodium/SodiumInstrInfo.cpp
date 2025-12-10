@@ -74,10 +74,7 @@ void SodiumInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
 
   MachineFunction *MF = MBB.getParent();
   const MachineFrameInfo &MFI = MF->getFrameInfo();
-
-  unsigned Opcode;
-  Opcode = Sodium::SW;
-  assert(Opcode && "Register class not handled!");
+  unsigned Opcode = Sodium::IntRegsRegClass.contains(SrcReg) ? Sodium::SW : Sodium::SD;
 
   MachineMemOperand *MMO = MF->getMachineMemOperand(
     MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOStore,
@@ -101,10 +98,7 @@ void SodiumInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
 
   MachineFunction *MF = MBB.getParent();
   const MachineFrameInfo &MFI = MF->getFrameInfo();
-
-  unsigned Opcode;
-  Opcode = Sodium::LW;
-  assert(Opcode && "Register class not handled!");
+  unsigned Opcode = Sodium::IntRegsRegClass.contains(DstReg) ? Sodium::LW : Sodium::LD;
 
   MachineMemOperand *MMO = MF->getMachineMemOperand(
     MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOLoad,

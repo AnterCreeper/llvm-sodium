@@ -87,8 +87,12 @@ static bool isCandidateToPair(const MachineInstr &MI) {
     case Sodium::SW:
       break;
   }
-  if (!MI.getOperand(1).isReg() &&
-      !MI.getOperand(1).isFI())
+  //TODO: can we combine together?
+  //  LW %fixed-stack.0, 0 :: (load (s16) from %fixed-stack.0)
+  //  LW %fixed-stack.1, 0 :: (load (s16) from %fixed-stack.1, align 16)
+  //if (!MI.getOperand(1).isReg() &&
+  //    !MI.getOperand(1).isFI())
+  if (!MI.getOperand(1).isReg())
     return false;
   if (!MI.getOperand(2).isImm())
     return false;
@@ -156,7 +160,6 @@ bool SodiumLoadStoreOpt::tryToPairLdStInst(MachineBasicBlock::iterator &MBBI) {
 /// current instruction into a wider equivalent or a load/store pair.
 MachineBasicBlock::iterator
 SodiumLoadStoreOpt::findMatchingInsn(MachineBasicBlock::iterator I) {
-  //TODO: Zero Store
   MachineBasicBlock::iterator E = I->getParent()->end();
   MachineBasicBlock::iterator MBBI = next_nodbg(I, E);
 
@@ -207,24 +210,40 @@ SodiumLoadStoreOpt::mergePairedInsns(MachineBasicBlock::iterator I,
   MachineFunction *MF = MBB.getParent();
 
   // Construct the new instruction.
-  DebugLoc DL = I->getDebugLoc();
-  MachineBasicBlock::iterator InsertionPoint = I;
+  DebugLoc DL  = I->getDebugLoc();
+  DebugLoc DL2 = Paired->getDebugLoc();
 
   MachineInstr *Lo = &*I;
   MachineInstr *Hi = &*Paired;
-  unsigned Opcode = Lo->getOpcode() == Sodium::LW ? Sodium::LD : Sodium::SD;
   Register ScratchReg =
     MF->getRegInfo().createVirtualRegister(&Sodium::IntPairRegClass);
 
-  MachineInstr *Res =
-  BuildMI(MBB, InsertionPoint, DL, TII->get(Opcode), ScratchReg)
-    .add(Lo->getOperand(1))
-    .add(Lo->getOperand(2));
-  BuildMI(MBB, InsertionPoint, DL, TII->get(TargetOpcode::COPY), Lo->getOperand(0).getReg())
-    .addReg(ScratchReg, 0, Sodium::sub_even);
+  MachineInstr *Res;
+  if (Lo->getOpcode() == Sodium::LW) {
+    MachineBasicBlock::iterator InsertionPoint = I;
+    Res =
+    BuildMI(MBB, InsertionPoint, DL,  TII->get(Sodium::LD), ScratchReg)
+      .add(Lo->getOperand(1))
+      .add(Lo->getOperand(2));
+    BuildMI(MBB, InsertionPoint, DL,  TII->get(TargetOpcode::COPY), Lo->getOperand(0).getReg())
+      .addReg(ScratchReg, 0, Sodium::sub_even);
+    BuildMI(MBB, InsertionPoint, DL2, TII->get(TargetOpcode::COPY), Hi->getOperand(0).getReg())
+      .addReg(ScratchReg, 0, Sodium::sub_odd);
 
-  BuildMI(MBB, InsertionPoint, Paired->getDebugLoc(), TII->get(TargetOpcode::COPY), Hi->getOperand(0).getReg())
-    .addReg(ScratchReg, 0, Sodium::sub_odd);
+  } else {
+    MachineBasicBlock::iterator InsertionPoint = Paired;
+    BuildMI(MBB, InsertionPoint, DL,  TII->get(TargetOpcode::REG_SEQUENCE), ScratchReg)
+      .addReg(Lo->getOperand(0).getReg())
+      .addImm(Sodium::sub_even)
+      .addReg(Hi->getOperand(0).getReg())
+      .addImm(Sodium::sub_odd);
+    Res =
+    BuildMI(MBB, InsertionPoint, DL,  TII->get(Sodium::SD))
+      .addReg(ScratchReg)
+      .add(Lo->getOperand(1))
+      .add(Lo->getOperand(2));
+
+  }
 
   LLVM_DEBUG(
       dbgs() << "Creating pair load/store. Replacing instructions:\n    ");

@@ -315,8 +315,8 @@ def SW : Store_rri<0b000, 0b00, "sw">;
 def SB : Store_rri<0b000, 0b10, "sb">;
 let IsSignExt = 1 in {
 def LD : Load_di<0b001, 0b01, "ld">;
-def SD : Store_dri<0b000, 0b01, "sd">;
 }
+def SD : Store_dri<0b000, 0b01, "sd">;
 
 def DCZERO  : Cache_ri<0b100, 0b01, "dc.zero">;
 def DCINVD  : Cache_ri<0b110, 0b01, "dc.invd">;
@@ -750,10 +750,18 @@ def : Pat<(i16 (int_sodium_pack IntRegs:$rs1, IntRegs:$rs2, uimm4:$imm4)), (PACK
 // v2i16 codegen patterns
 //===----------------------------------------------------------------------===//
 // build_vector
+def : Pat<(v2i16 (build_vector (i16 0), (i16 0))),
+          (COPY D0)>;
+def : Pat<(v2i16 (build_vector (i16 IntRegs:$rs1), (i16 IntRegs:$rs2))),
+          (REG_SEQUENCE IntPair,
+                        (i16 IntRegs:$rs1), sub_even,
+                        (i16 IntRegs:$rs2), sub_odd)>;
+/*
 def : Pat<(build_vector (i16 IntRegs:$rs1), (i16 IntRegs:$rs2)),
           (INSERT_SUBREG (INSERT_SUBREG (v2i16 (IMPLICIT_DEF)),
             (i16 IntRegs:$rs1), sub_even),
             (i16 IntRegs:$rs2), sub_odd)>;
+*/
 
 // extract_vector
 def : Pat<(extractelt (v2i16 IntPair:$rs), 0),

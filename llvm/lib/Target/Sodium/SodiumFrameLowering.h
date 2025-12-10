@@ -35,17 +35,9 @@ public:
   void emitPrologue(MachineFunction &MF, MachineBasicBlock &MBB) const override;
   void emitEpilogue(MachineFunction &MF, MachineBasicBlock &MBB) const override;
 
-  /*
-  // custom Spill and Restore to generate pair loadstore ops
-  bool spillCalleeSavedRegisters(MachineBasicBlock &MBB,
-                                 MachineBasicBlock::iterator MI,
-                                 ArrayRef<CalleeSavedInfo> CSI,
-                                 const TargetRegisterInfo *TRI) const override;
-  bool restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
-                                   MachineBasicBlock::iterator MI,
-                                   MutableArrayRef<CalleeSavedInfo> CSI,
-                                   const TargetRegisterInfo *TRI) const override;
-  */
+  // Custom spill slot assignment to merge into pairs
+  bool assignCalleeSavedSpillSlots(MachineFunction &MF, const TargetRegisterInfo *TRI,
+                                   std::vector<CalleeSavedInfo> &CSI) const override;
 
   bool hasReservedCallFrame(const MachineFunction &MF) const override;
   void determineCalleeSaves(MachineFunction &MF, BitVector &SavedRegs,
