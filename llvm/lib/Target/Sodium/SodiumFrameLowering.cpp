@@ -27,23 +27,22 @@ using namespace llvm;
 
 #define DEBUG_TYPE "frame-info"
 
-/*
+static cl::opt<bool>
+EnablePairSpillSlots("sodium-pair-spillrestore", cl::Hidden,
+                     cl::init(false), cl::desc("Enable pair load/store opt for register spill and restore"));
+
 // hasFP - Return true if the specified function should have a dedicated frame
 // pointer register.  This is true if the function has variable sized allocas,
 // if it needs dynamic stack realignment, if frame pointer elimination is
 // disabled, or if the frame address is taken.
 bool SodiumFrameLowering::hasFP(const MachineFunction &MF) const {
-  const MachineFrameInfo &MFI = MF.getFrameInfo();
-  const TargetRegisterInfo *TRI = STI.getRegisterInfo();
-
-  return MF.getTarget().Options.DisableFramePointerElim(MF) ||
-    MFI.hasVarSizedObjects() || MFI.isFrameAddressTaken() ||
-    TRI->needsStackRealignment(MF);
-}
-*/
-
-bool SodiumFrameLowering::hasFP(const MachineFunction &MF) const {
   return false;
+  //const MachineFrameInfo &MFI = MF.getFrameInfo();
+  //const TargetRegisterInfo *TRI = STI.getRegisterInfo();
+
+  //return MF.getTarget().Options.DisableFramePointerElim(MF) ||
+  //  MFI.hasVarSizedObjects() || MFI.isFrameAddressTaken() ||
+  //  TRI->needsStackRealignment(MF);
 }
 
 void SodiumFrameLowering::adjustReg(MachineBasicBlock &MBB,
@@ -281,7 +280,9 @@ SodiumFrameLowering::assignCalleeSavedSpillSlots(MachineFunction &MF,
                                                  const TargetRegisterInfo *TRI,
                                                  std::vector<CalleeSavedInfo> &CSI) const {
   if (CSI.empty())
-    return true; // Early exit if no callee saved registers are modified!
+    return true;  // Early exit if no callee saved registers are modified!
+  if (!EnablePairSpillSlots)
+    return false; // Use default assignment if opt is disabled.
 
   MachineFrameInfo &MFI = MF.getFrameInfo();
 
@@ -304,6 +305,5 @@ SodiumFrameLowering::assignCalleeSavedSpillSlots(MachineFunction &MF,
     int FrameIdx = MFI.CreateStackObject(Size, Alignment, true);
     I->setFrameIdx(FrameIdx);
   }
-
   return true;
 }

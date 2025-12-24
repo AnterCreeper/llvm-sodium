@@ -756,12 +756,6 @@ def : Pat<(v2i16 (build_vector (i16 IntRegs:$rs1), (i16 IntRegs:$rs2))),
           (REG_SEQUENCE IntPair,
                         (i16 IntRegs:$rs1), sub_even,
                         (i16 IntRegs:$rs2), sub_odd)>;
-/*
-def : Pat<(build_vector (i16 IntRegs:$rs1), (i16 IntRegs:$rs2)),
-          (INSERT_SUBREG (INSERT_SUBREG (v2i16 (IMPLICIT_DEF)),
-            (i16 IntRegs:$rs1), sub_even),
-            (i16 IntRegs:$rs2), sub_odd)>;
-*/
 
 // extract_vector
 def : Pat<(extractelt (v2i16 IntPair:$rs), 0),
