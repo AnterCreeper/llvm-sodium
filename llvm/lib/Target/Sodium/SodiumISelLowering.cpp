@@ -235,9 +235,8 @@ void SodiumTargetLowering::ReplaceNodeResults(SDNode *N,
   }
 }
 
-template<typename T> void
-SodiumTargetLowering::analyzeArgs(const SmallVectorImpl<T> &Args,
-                                    CCState &CCInfo) const {
+template<typename T> static void
+analyzeArgs(const SmallVectorImpl<T> &Args, CCState &CCInfo) {
   unsigned NumArgs = Args.size();
   for (unsigned I = 0; I != NumArgs; ++I) {
     MVT ArgVT = Args[I].VT;

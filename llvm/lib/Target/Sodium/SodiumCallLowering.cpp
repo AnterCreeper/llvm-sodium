@@ -47,6 +47,16 @@ using namespace llvm;
 
 #include "SodiumGenCallingConv.inc"
 
+template<typename T> static void
+analyzeArgs(const SmallVectorImpl<T> &Args, CCState &CCInfo) {
+  unsigned NumArgs = Args.size();
+  for (unsigned I = 0; I != NumArgs; ++I) {
+    MVT ArgVT = Args[I].VT;
+    ISD::ArgFlagsTy ArgFlags = Args[I].Flags;
+    SodiumCC(I, ArgVT, ArgVT, CCValAssign::Full, ArgFlags, CCInfo);
+  }
+}
+
 bool SodiumTargetLowering::
 isEligibleForTailCallOptimization(CCState &CCInfo,
                                   CallLoweringInfo &CLI, MachineFunction &MF,

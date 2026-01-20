@@ -83,8 +83,6 @@ public:
                              Instruction *I = nullptr) const override;
 
 private:
-  template<typename T>
-  void analyzeArgs(const SmallVectorImpl<T> &Args, CCState &CCInfo) const;
   bool isEligibleForTailCallOptimization(CCState &CCInfo,
                                          CallLoweringInfo &CLI, MachineFunction &MF,
                                          const SmallVector<CCValAssign, 16> &ArgLocs) const;
